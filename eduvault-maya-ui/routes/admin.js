@@ -115,9 +115,9 @@ router.patch("/teachers/:emp_id/active", adminActionLimiter, async (req, res) =>
   }
 });
 
-router.patch("/teachers/:emp_id/role", adminActionLimiter, (req, res) => {
+router.patch("/teachers/:emp_id/role", adminActionLimiter, async (req, res) => {
   try {
-    const teacher = db.setTeacherRole(req.params.emp_id, req.body.role);
+    const teacher = await db.setTeacherRole(req.params.emp_id, req.body.role);
     res.json({ teacher });
   } catch (err) {
     res.status(400).json({ error: err.message });
