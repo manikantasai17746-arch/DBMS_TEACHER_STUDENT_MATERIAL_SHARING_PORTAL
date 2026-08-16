@@ -34,8 +34,7 @@ router.post("/invitations", adminActionLimiter, async (req, res) => {
       });
     }
 
-    const invitation = db.createInvitation({
-      email,
+const invitation = await db.createInvitation({      email,
       department,
       employee_id: emp_id,
       name,
