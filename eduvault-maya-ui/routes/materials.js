@@ -303,8 +303,16 @@ router.post(
 
         cleanupTemp();
 
-        return res.status(400).json({
-          error: e.message,
+        // Never leak low-level SSL / connection internals to the browser.
+        const msg = String(e && e.message ? e.message : e);
+        const isInfra =
+          /ssl|tls|econnrefused|enotfound|timeout|handshake|EPROTO|self-signed/i.test(
+            msg
+          );
+        return res.status(isInfra ? 503 : 400).json({
+          error: isInfra
+            ? "Database connection failed. Check DATABASE_URL (use Supabase Transaction pooler, port 6543) and SSL settings."
+            : msg,
         });
       }
     });
