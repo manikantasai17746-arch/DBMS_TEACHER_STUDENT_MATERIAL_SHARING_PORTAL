@@ -92,8 +92,14 @@ router.post("/enrollment-codes/:id/revoke", adminActionLimiter, (req, res) => {
 });
 
 // ---- Employees (teachers) ---------------------------------------------
-router.get("/teachers", (req, res) => {
-  res.json({ teachers: db.listAllTeachers() });
+router.get("/teachers", async (req, res) => {
+  try {
+    const teachers = await db.listAllTeachers();
+    res.json({ teachers });
+  } catch (err) {
+    console.error("[eduvault] Failed to list teachers:", err);
+    res.status(500).json({ error: "Could not load teachers." });
+  }
 });
 
 router.patch("/teachers/:emp_id/active", adminActionLimiter, (req, res) => {
