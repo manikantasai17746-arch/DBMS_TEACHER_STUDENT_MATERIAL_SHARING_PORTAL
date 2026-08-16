@@ -182,8 +182,7 @@ router.post("/login", loginLimiter, async (req, res) => {
     if (!emp_id || !password) {
       return res.status(400).json({ error: "Employee ID and password are required." });
     }
-    const teacher = db.authenticateTeacher(emp_id, password);
-
+const teacher = await db.authenticateTeacher(emp_id, password);
     // A correct password proves this browser/device belongs to the
     // account holder, so it's safe to trust for future card-login scans.
     if (req.body.device_token) {
