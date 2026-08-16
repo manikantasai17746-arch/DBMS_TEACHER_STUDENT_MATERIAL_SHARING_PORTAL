@@ -67,9 +67,9 @@ const invitation = await db.createInvitation({      email,
   }
 });
 
-router.post("/invitations/:id/revoke", adminActionLimiter, (req, res) => {
+router.post("/invitations/:id/revoke", adminActionLimiter, async (req, res) => {
   try {
-    const invitation = db.revokeInvitation(req.params.id);
+    const invitation = await db.revokeInvitation(req.params.id);
     res.json({ invitation });
   } catch (err) {
     res.status(400).json({ error: err.message });
