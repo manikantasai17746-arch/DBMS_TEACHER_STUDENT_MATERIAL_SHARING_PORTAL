@@ -6,14 +6,43 @@
 const crypto = require("crypto");
 const { Pool } = require("pg");
 
-// Connection pool - works with both local PostgreSQL and Supabase
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://localhost/eduvault",
-  // Supabase requires SSL. Local Postgres usually does not.
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("supabase")
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
+// Connection pool — works with local PostgreSQL and Supabase (Vercel serverless).
+// CRITICAL for Supabase + Vercel:
+// 1. Use the Transaction pooler URI (port 6543) from Supabase → Settings → Database
+//    "Connection string" → Mode: Transaction. Add ?sslmode=require if missing.
+// 2. SSL must be enabled for any non-local host (Supabase rejects plaintext).
+// 3. max: 1 avoids exhausting Supabase free-tier connections under serverless.
+function buildPoolConfig() {
+  const connectionString =
+    process.env.DATABASE_URL || "postgresql://localhost/eduvault";
+
+  const isLocal =
+    /localhost|127\.0\.0\.1/.test(connectionString) &&
+    !process.env.DATABASE_SSL;
+
+  const needsSsl =
+    !isLocal ||
+    process.env.DATABASE_SSL === "true" ||
+    /supabase|sslmode=require/i.test(connectionString);
+
+  // On Vercel / other serverless platforms keep the pool tiny.
+  const isServerless = !!(
+    process.env.VERCEL ||
+    process.env.AWS_LAMBDA_FUNCTION_NAME ||
+    process.env.FUNCTION_NAME
+  );
+
+  return {
+    connectionString,
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+    max: isServerless ? 1 : 10,
+    idleTimeoutMillis: isServerless ? 10000 : 30000,
+    connectionTimeoutMillis: 15000,
+    allowExitOnIdle: isServerless,
+  };
+}
+
+const pool = new Pool(buildPoolConfig());
 
 // Handle connection errors
 pool.on("error", (err) => {
@@ -756,13 +785,16 @@ async function findMaterial(material_id) {
 }
 
 async function findMaterialByStoredFilename(filename) {
-  const result = await pool.query(`SELECT * FROM materials`);
-  const rows = result.rows;
-  const match = rows.find((m) => {
-    const basename = m.file_url.split("/").pop();
-    return basename === filename;
-  });
-  return match ? rowMaterial(match) : null;
+  // Match by trailing path segment without loading every row into memory.
+  const result = await pool.query(
+    `SELECT * FROM materials
+     WHERE file_url = $1
+        OR file_url LIKE $2
+        OR file_url LIKE $3
+     LIMIT 1`,
+    [filename, `%/${filename}`, `%\\${filename}`]
+  );
+  return result.rows.length ? rowMaterial(result.rows[0]) : null;
 }
 
 async function deleteMaterial(material_id, emp_id) {
