@@ -218,6 +218,25 @@ async function initializeDatabase() {
 }
 
 // Initialize on module load
+
+// Ensure older Supabase schemas pick up columns added later (CREATE TABLE IF NOT EXISTS
+// will not alter an existing table).
+async function ensureStudentSchema() {
+  try {
+    await pool.query(`
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS semester TEXT;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS department TEXT;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS email TEXT;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS active BOOLEAN NOT NULL DEFAULT true;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS bookmarked_teachers JSONB NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE students ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
+    `);
+  } catch (err) {
+    console.warn("[eduvault] ensureStudentSchema:", err.message);
+  }
+}
+ensureStudentSchema();
+
 initializeDatabase();
 
 // ---- Utility Functions -----
@@ -262,6 +281,21 @@ function rowTeacher(t) {
   };
 }
 
+function parseBookmarks(value) {
+  if (Array.isArray(value)) return value;
+  if (value == null || value === "") return [];
+  if (typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  // pg sometimes returns JSON objects; only keep arrays
+  return [];
+}
+
 function rowStudent(s) {
   if (!s) return null;
   return {
@@ -271,10 +305,9 @@ function rowStudent(s) {
     semester: s.semester,
     email: s.email,
     password_hash: s.password_hash,
-    active: Boolean(s.active),
-    bookmarked_teachers: Array.isArray(s.bookmarked_teachers) 
-      ? s.bookmarked_teachers 
-      : (typeof s.bookmarked_teachers === "string" ? JSON.parse(s.bookmarked_teachers) : []),
+    // pg may return boolean or (rarely) string/int depending on driver/settings
+    active: s.active === true || s.active === 1 || s.active === "t" || s.active === "true",
+    bookmarked_teachers: parseBookmarks(s.bookmarked_teachers),
     created_at: s.created_at,
   };
 }
@@ -437,7 +470,10 @@ async function authenticateTeacherByCard(emp_id, device_token) {
 
 // ---- Students ----
 async function createStudent({ roll_no, name, department, semester, email, password }) {
-  const existing = await pool.query(`SELECT roll_no FROM students WHERE roll_no = $1`, [roll_no]);
+  const id = String(roll_no || "").trim();
+  if (!id) throw new Error("Roll Number is required.");
+
+  const existing = await pool.query(`SELECT roll_no FROM students WHERE roll_no = $1`, [id]);
   if (existing.rows.length) throw new Error("A student with this Roll Number already exists.");
 
   const password_hash = hashPassword(password);
@@ -445,10 +481,22 @@ async function createStudent({ roll_no, name, department, semester, email, passw
   const result = await pool.query(
     `INSERT INTO students
      (roll_no, name, department, semester, email, password_hash, active, bookmarked_teachers)
-     VALUES ($1, $2, $3, $4, $5, $6, true, '[]'::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $6, true, $7::jsonb)
      RETURNING *`,
-    [roll_no, name, department, semester, email, password_hash]
+    [
+      id,
+      String(name || "").trim(),
+      department ? String(department).trim() : null,
+      semester ? String(semester).trim() : null,
+      email ? String(email).trim() : null,
+      password_hash,
+      "[]",
+    ]
   );
+
+  if (!result.rows.length) {
+    throw new Error("Student was not saved. Please try again.");
+  }
 
   return sanitizeStudent(rowStudent(result.rows[0]));
 }
@@ -782,8 +830,32 @@ async function listAllTeachers() {
 }
 
 async function listAllStudents() {
-  const result = await pool.query(`SELECT * FROM students`);
-  return result.rows.map((s) => sanitizeStudent(rowStudent(s)));
+  const result = await pool.query(
+    `SELECT * FROM students ORDER BY created_at DESC NULLS LAST, roll_no ASC`
+  );
+  const out = [];
+  for (const row of result.rows) {
+    try {
+      const mapped = sanitizeStudent(rowStudent(row));
+      if (mapped && mapped.roll_no) out.push(mapped);
+    } catch (err) {
+      // Never let one bad row wipe the whole admin list
+      console.error("[eduvault] Skipping bad student row:", row && row.roll_no, err.message);
+      if (row && row.roll_no) {
+        out.push({
+          roll_no: row.roll_no,
+          name: row.name || "(unknown)",
+          department: row.department || null,
+          semester: row.semester || null,
+          email: row.email || null,
+          active: true,
+          bookmarked_teachers: [],
+          created_at: row.created_at || null,
+        });
+      }
+    }
+  }
+  return out;
 }
 
 async function setTeacherActive(emp_id, active) {
