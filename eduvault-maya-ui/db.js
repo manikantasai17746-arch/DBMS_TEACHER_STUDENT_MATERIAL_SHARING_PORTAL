@@ -8,13 +8,49 @@ const { Pool } = require("pg");
 
 // Connection pool — works with local PostgreSQL and Supabase (Vercel serverless).
 // CRITICAL for Supabase + Vercel:
-// 1. Use the Transaction pooler URI (port 6543) from Supabase → Settings → Database
-//    "Connection string" → Mode: Transaction. Add ?sslmode=require if missing.
-// 2. SSL must be enabled for any non-local host (Supabase rejects plaintext).
-// 3. max: 1 avoids exhausting Supabase free-tier connections under serverless.
+// 1. Prefer Transaction pooler URI (port 6543) from Supabase → Settings → Database.
+// 2. We auto-add sslmode=require and pgbouncer=true for pooler hosts.
+// 3. max: 1 + query retries avoid transient SSL/handshake failures on cold starts.
+function normalizeDatabaseUrl(raw) {
+  let url = (raw || "postgresql://localhost/eduvault").trim();
+  // Strip accidental quotes from Vercel env UI copy-paste
+  if (
+    (url.startsWith('"') && url.endsWith('"')) ||
+    (url.startsWith("'") && url.endsWith("'"))
+  ) {
+    url = url.slice(1, -1);
+  }
+
+  const isLocal = /localhost|127\.0\.0\.1/.test(url);
+  if (isLocal) return url;
+
+  const isSupabase = /supabase\.(co|com)|pooler\.supabase/i.test(url);
+  const isPooler = /pooler\.supabase|:6543\b/i.test(url);
+
+  try {
+    const u = new URL(url);
+    // Always require TLS for remote hosts
+    if (!u.searchParams.has("sslmode")) u.searchParams.set("sslmode", "require");
+    // Transaction-mode PgBouncer (port 6543) breaks prepared statements unless flagged
+    if (isPooler || isSupabase) {
+      if (!u.searchParams.has("pgbouncer")) u.searchParams.set("pgbouncer", "true");
+    }
+    return u.toString();
+  } catch {
+    // Fallback string append if URL parser fails on unusual schemes
+    const join = url.includes("?") ? "&" : "?";
+    if (!/sslmode=/i.test(url)) url += `${join}sslmode=require`;
+    if ((isPooler || isSupabase) && !/pgbouncer=/i.test(url)) {
+      url += (url.includes("?") ? "&" : "?") + "pgbouncer=true";
+    }
+    return url;
+  }
+}
+
 function buildPoolConfig() {
-  const connectionString =
-    process.env.DATABASE_URL || "postgresql://localhost/eduvault";
+  const connectionString = normalizeDatabaseUrl(
+    process.env.DATABASE_URL || "postgresql://localhost/eduvault"
+  );
 
   const isLocal =
     /localhost|127\.0\.0\.1/.test(connectionString) &&
@@ -25,20 +61,31 @@ function buildPoolConfig() {
     process.env.DATABASE_SSL === "true" ||
     /supabase|sslmode=require/i.test(connectionString);
 
-  // On Vercel / other serverless platforms keep the pool tiny.
   const isServerless = !!(
     process.env.VERCEL ||
     process.env.AWS_LAMBDA_FUNCTION_NAME ||
     process.env.FUNCTION_NAME
   );
 
+  if (process.env.DATABASE_URL) {
+    // Log host only (never password) so Vercel runtime logs help debugging
+    try {
+      const u = new URL(connectionString);
+      console.log(
+        `[eduvault] Postgres host=${u.hostname} port=${u.port || "5432"} ssl=${!!needsSsl} serverless=${isServerless}`
+      );
+    } catch (_) {}
+  }
+
   return {
     connectionString,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     max: isServerless ? 1 : 10,
-    idleTimeoutMillis: isServerless ? 10000 : 30000,
-    connectionTimeoutMillis: 15000,
+    idleTimeoutMillis: isServerless ? 5000 : 30000,
+    connectionTimeoutMillis: 20000,
     allowExitOnIdle: isServerless,
+    keepAlive: true,
+    keepAliveInitialDelayMillis: 10000,
   };
 }
 
@@ -48,6 +95,34 @@ const pool = new Pool(buildPoolConfig());
 pool.on("error", (err) => {
   console.error("Unexpected error on idle client", err);
 });
+
+// Retry transient SSL / connection drops (common on Vercel cold start + Supabase)
+const TRANSIENT_RE =
+  /ssl|tls|ECONNRESET|ECONNREFUSED|Connection terminated|timeout|EPROTO|handshake|Client has encountered a connection|Connection ended unexpectedly|sorry, too many clients/i;
+
+const _rawQuery = pool.query.bind(pool);
+pool.query = async function queryWithRetry(text, params) {
+  let lastErr;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      return await _rawQuery(text, params);
+    } catch (err) {
+      lastErr = err;
+      const msg = String(err && err.message ? err.message : err);
+      if (attempt < 3 && TRANSIENT_RE.test(msg)) {
+        console.warn(
+          `[eduvault] DB transient error (attempt ${attempt}/3):`,
+          msg.slice(0, 180)
+        );
+        // Drop bad clients from the pool, then brief backoff
+        await new Promise((r) => setTimeout(r, 300 * attempt));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr;
+};
 
 // Initialize database schema on startup
 async function initializeDatabase() {
