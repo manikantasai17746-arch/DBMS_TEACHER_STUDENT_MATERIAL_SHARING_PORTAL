@@ -153,9 +153,9 @@ router.patch("/students/:roll_no/active", adminActionLimiter, async (req, res) =
   }
 });
 
-router.delete("/students/:roll_no", adminActionLimiter, (req, res) => {
+router.delete("/students/:roll_no", adminActionLimiter, async (req, res) => {
   try {
-    const student = db.deleteStudent(req.params.roll_no);
+    const student = await db.deleteStudent(req.params.roll_no);
     res.json({ student });
   } catch (err) {
     res.status(400).json({ error: err.message });
