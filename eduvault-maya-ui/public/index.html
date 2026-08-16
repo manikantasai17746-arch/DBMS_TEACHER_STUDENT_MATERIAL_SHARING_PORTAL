@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EduVault — Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .campus-caption { text-align: center; font-size: 0.82rem; color: var(--mute); margin: 0.6rem 0 1.5rem; }
+
+  /* ---- How EduVault Works : step timeline ---- */
+  .media-section { margin: 2.4rem 0 1.6rem; position: relative; }
+  .media-section h3 { font-size: 1.3rem; margin-bottom: 0.4rem; text-align: center; color: var(--au-blue-deep); }
+  .media-section .media-sub { text-align: center; color: var(--mute); font-size: 0.9rem; margin: 0 0 1.8rem; }
+
+  .how-it-works {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; position: relative;
+    background: linear-gradient(180deg, #ffffff 0%, #F6F9FF 100%);
+    border: 1px solid var(--line); border-radius: 18px; padding: 2rem 1.4rem 1.6rem;
+    box-shadow: 0 10px 32px rgba(15,20,25,0.08);
+    overflow: hidden;
+  }
+  .how-it-works::before {
+    content: ""; position: absolute; top: 2.85rem; left: 12%; right: 12%; height: 3px;
+    background: repeating-linear-gradient(90deg, var(--au-blue) 0 10px, transparent 10px 18px);
+    opacity: 0.35; z-index: 0;
+  }
+  .hiw-step { position: relative; z-index: 1; text-align: center; padding: 0 0.6rem; }
+  .hiw-num {
+    width: 54px; height: 54px; margin: 0 auto 0.9rem; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Spartan', sans-serif; font-weight: 800; font-size: 1.3rem; color: #fff;
+    background: linear-gradient(135deg, var(--au-blue) 0%, var(--au-blue-deep) 100%);
+    box-shadow: 0 6px 16px rgba(21,88,192,0.35); border: 4px solid #fff;
+  }
+  .hiw-step:nth-child(2) .hiw-num { background: linear-gradient(135deg, var(--au-orange) 0%, var(--au-orange-dark) 100%); box-shadow: 0 6px 16px rgba(243,108,33,0.35); }
+  .hiw-step:nth-child(3) .hiw-num { background: linear-gradient(135deg, var(--au-green) 0%, #0C7A36 100%); box-shadow: 0 6px 16px rgba(22,163,74,0.35); }
+  .hiw-step:nth-child(4) .hiw-num { background: linear-gradient(135deg, var(--au-gold) 0%, #A15C04 100%); box-shadow: 0 6px 16px rgba(217,119,6,0.35); }
+  .hiw-step h4 { font-family: 'Spartan', sans-serif; font-size: 0.95rem; margin: 0 0 0.4rem; color: var(--ink); }
+  .hiw-step p { font-size: 0.8rem; color: var(--mute); margin: 0; line-height: 1.5; }
+  @media (max-width: 760px) {
+    .how-it-works { grid-template-columns: 1fr; gap: 1.6rem; }
+    .how-it-works::before { display: none; }
+  }
+
+  /* Hero visual polish */
+  .hero { overflow: hidden; }
+</style>
+<script src="/js/common.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;">
+    <div class="brand">
+      <img src="/aditya-logo.png" alt="Aditya University" class="brand-logo">
+      <div class="brand-text">
+        <span class="app">EduVault</span>
+      </div>
+    </div>
+  </a>
+  <nav>
+    <a href="/teacher-login.html">Teacher Login</a>
+    <a href="/student-login.html">Student Login</a>
+  </nav>
+</div>
+
+<div class="page">
+  <!-- Hero with university-style decorative objects (mouse-reactive) -->
+  <div class="hero">
+    <div class="deco-layer" aria-hidden="true">
+      <div class="deco-dots deco-interactive" data-depth="0.04" style="top: 10px; left: 4%; width: 110px; height: 100px;"></div>
+      <div class="deco-arc deco-interactive" data-depth="0.06" style="top: -20px; right: 6%;"></div>
+      <div class="deco-blob soft deco-interactive" data-depth="0.03" style="bottom: -30px; left: -40px; width: 140px; height: 110px;"></div>
+      <div class="deco-circle deco-interactive" data-depth="0.025" style="width: 180px; height: 180px; top: 40%; right: -60px;"></div>
+      <div class="deco-dots red deco-interactive" data-depth="0.05" style="bottom: 20px; right: 18%; width: 80px; height: 70px;"></div>
+    </div>
+
+    <div class="uni-badge">
+      <img src="/aditya-logo.png" alt="">
+      Surampalem, Andhra Pradesh
+    </div>
+    <div class="eyebrow">Academic Material Portal</div>
+    <h1>Every subject's material,<br>in one permanent place.</h1>
+    <p>EduVault replaces scattered WhatsApp groups with a single searchable
+       record. Look up a teacher once, and see everything they've ever
+       shared — from day one, even if you joined the course last week.</p>
+  </div>
+
+  <!-- Login / role UI moved UP -->
+  <div class="role-grid" style="margin-top: 0.5rem;">
+    <div class="role-card" style="position:relative; overflow:hidden;">
+      <div class="deco-dots blue" style="position:absolute; right:-10px; top:-10px; width:70px; height:60px; opacity:0.3;"></div>
+      <div class="icon">T</div>
+      <h3>I'm a Teacher</h3>
+      <p>Upload PDFs, PPTs and notes tagged by subject and unit. See who's actually accessing your material.</p>
+      <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+        <a class="btn btn-primary" href="/teacher-login.html">Log In</a>
+        <a class="btn btn-outline" href="/teacher-register.html">Register</a>
+      </div>
+    </div>
+    <div class="role-card" style="position:relative; overflow:hidden;">
+      <div class="deco-arc sm" style="position:absolute; right:-25px; bottom:-25px; opacity:0.45;"></div>
+      <div class="icon">S</div>
+      <h3>I'm a Student</h3>
+      <p>Select a teacher by Employee ID and name to instantly see their complete, permanent material history.</p>
+      <div style="display:flex; gap:0.6rem; flex-wrap:wrap;">
+        <a class="btn btn-primary" href="/student-login.html">Log In</a>
+        <a class="btn btn-outline" href="/student-register.html">Register</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video moved DOWN -->
+  <div class="campus-banner" style="margin-top: 2.2rem;">
+    <video src="https://adityauniversity.in/public/uploads/page_section_attributes/AZrH9rtFBp2Mq2pQF9SKfjh5IabXDZLzpOG2c45R.mp4"
+      autoplay muted loop playsinline controls></video>
+  </div>
+  <p class="campus-caption">Surampalem, Kakinada District, Andhra Pradesh</p>
+
+  <div class="stats-bar">
+    <div class="stat"><div class="num">100+</div><div class="lbl">Students</div></div>
+    <div class="stat"><div class="num">Faculty</div><div class="lbl">Materials Hub</div></div>
+    <div class="stat"><div class="num">Always</div><div class="lbl">Full History</div></div>
+    <div class="stat"><div class="num">Scan</div><div class="lbl">ID Login</div></div>
+  </div>
+
+  <!-- Highlight card inspired by 100% placement motif -->
+  <div class="highlight-card" style="margin: 2rem 0 1.5rem;">
+    <div class="deco-blob" style="right: -25px; top: -30px;"></div>
+    <div class="deco-dots red" style="right: 18px; bottom: 14px;"></div>
+    <div style="display:flex; align-items:center; gap:1.6rem; flex-wrap:wrap; position:relative; z-index:1;">
+      <div class="deco-badge" style="position:static;">
+        <span class="pct">100%</span>
+        <span class="lbl">Material History</span>
+      </div>
+      <div style="flex:1; min-width:200px;">
+        <h3 style="font-size:1.1rem; color:var(--au-blue-deep); margin:0 0 0.35rem;">Never lose a note again</h3>
+        <p class="subtitle" style="margin:0;">Every file a teacher uploads stays permanently linked to their profile. Late joiners and lateral-entry students still get the complete archive.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="media-section">
+    <div class="deco-layer" aria-hidden="true">
+      <div class="deco-dots deco-interactive" data-depth="0.04" style="top: -10px; left: -20px; width: 90px; height: 80px;"></div>
+      <div class="deco-arc sm deco-interactive" data-depth="0.055" style="top: 30px; right: -30px; opacity:0.5;"></div>
+    </div>
+    <h3>How the Application Works</h3>
+    <p class="media-sub">From first scan to a full material history — four steps, no WhatsApp required.</p>
+    <div class="how-it-works">
+      <div class="hiw-step">
+        <div class="hiw-num">1</div>
+        <h4>Register once</h4>
+        <p>Teachers sign up with their Employee ID; students sign up with their Roll Number — or just scan their ID card.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">2</div>
+        <h4>Scan or log in</h4>
+        <p>Next visit, tap "Scan ID Card." The barcode fills in your ID automatically — no password to remember.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">3</div>
+        <h4>Teachers upload</h4>
+        <p>Teachers drop in PDFs, PPTs and notes tagged by subject and unit, straight from their dashboard.</p>
+      </div>
+      <div class="hiw-step">
+        <div class="hiw-num">4</div>
+        <h4>Students browse anytime</h4>
+        <p>Students look up any teacher and see everything ever shared — even material posted before they joined.</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="grid-2">
+    <div class="card" style="position:relative; overflow:hidden;">
+      <div class="deco-dots orange" style="position:absolute; right:8px; top:8px; width:60px; height:50px; opacity:0.35;"></div>
+      <h3 style="font-size:1rem; color:var(--au-blue-deep);">Why not WhatsApp?</h3>
+      <p class="subtitle" style="margin-bottom:0;">A group chat only shows history from the moment you join it.
+        Join late, change sections, or transfer in as a lateral entry student, and everything shared
+        before you arrived is gone for good.</p>
+    </div>
+    <div class="card" style="position:relative; overflow:hidden;">
+      <div class="deco-blob soft" style="position:absolute; right:-40px; bottom:-30px; width:100px; height:80px; opacity:0.4;"></div>
+      <h3 style="font-size:1rem; color:var(--au-blue-deep);">How EduVault fixes it</h3>
+      <p class="subtitle" style="margin-bottom:0;">Material is stored against the teacher's profile in a
+        database, not inside a disappearing chat thread — so a lookup by Employee ID always returns the
+        full history, no matter when your account was created.</p>
+    </div>
+  </div>
+</div>
+
+<!-- University-style footer -->
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="brand-col">
+      <img src="/aditya-logo.png" alt="Aditya University">
+      <div>
+        <strong style="font-family:'Spartan',sans-serif; color:var(--au-blue-deep); font-size:1rem;">Aditya University</strong>
+        <p style="margin-top:0.3rem;">EduVault — Centralized Teacher–Student Academic Material Sharing</p>
+      </div>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <p>Call: +91 63 00 45 90 01</p>
+      <p>Email: <a href="mailto:support_tt@adityauniversity.in">support_tt@adityauniversity.in</a></p>
+      <p style="margin-top:0.5rem;">Surampalem, Kakinada District,<br>Andhra Pradesh</p>
+    </div>
+    <div>
+      <h4>Our Social Media</h4>
+      <div class="socials">
+        <a href="https://www.linkedin.com/school/adityauniversity/" target="_blank" rel="noopener" title="Aditya University – LinkedIn" aria-label="LinkedIn">in</a>
+        <a href="https://www.youtube.com/@adityauniversity" target="_blank" rel="noopener" title="Aditya University – YouTube" aria-label="YouTube">▶</a>
+        <a href="https://www.facebook.com/adityauniversity" target="_blank" rel="noopener" title="Aditya University – Facebook" aria-label="Facebook">f</a>
+        <a href="https://www.instagram.com/aditya_university/" target="_blank" rel="noopener" title="Aditya University – Instagram" aria-label="Instagram">◎</a>
+      </div>
+      <p style="margin-top:0.7rem; font-size:0.78rem; color:var(--mute); line-height:1.45;">
+        <a href="https://www.linkedin.com/company/technicalhub" target="_blank" rel="noopener" style="color:var(--au-blue);">TECHNICAL HUB</a><br>
+        Aditya University – Surampalem, A.P<br>
+        <span style="color:var(--au-orange); font-weight:600;">#AchieveWithAditya</span>
+      </p>
+    </div>
+    <div class="copy">
+      Copyright 2026 © Aditya University. All Rights Reserved
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>

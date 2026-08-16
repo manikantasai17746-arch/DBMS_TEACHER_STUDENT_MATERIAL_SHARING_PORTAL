@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Login — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav><a href="/teacher-register.html">New here? Register</a></nav>
+</div>
+
+<div class="auth-page">
+  <!-- Decorative objects matching Aditya University visual language -->
+  <div class="auth-deco" aria-hidden="true">
+    <div class="deco-dots deco-interactive" data-depth="0.05" style="top: 8%; left: 5%; width: 140px; height: 130px; opacity: 0.7;"></div>
+    <div class="deco-arc deco-interactive" data-depth="0.08" style="top: 10%; right: 6%; width: 170px; height: 170px; opacity: 0.75;"></div>
+    <div class="deco-blob soft deco-interactive" data-depth="0.035" style="bottom: 15%; left: -40px; width: 160px; height: 130px; opacity: 0.55;"></div>
+    <div class="deco-circle deco-interactive" data-depth="0.03" style="width: 220px; height: 220px; bottom: 8%; right: -70px;"></div>
+    <div class="deco-dots red deco-interactive" data-depth="0.06" style="bottom: 20%; right: 10%; width: 100px; height: 90px; opacity: 0.55;"></div>
+  </div>
+
+  <div class="page narrow">
+    <div class="eyebrow">Faculty Login</div>
+    <h2>Welcome back</h2>
+    <p class="subtitle">Scan your ID card — the barcode holds your Employee ID, so there's nothing to type and no password needed.</p>
+
+    <div id="alertBox"></div>
+
+    <button id="scanBtn" class="btn btn-accent btn-block" style="margin-bottom:1.2rem;">
+      Scan ID Card
+    </button>
+
+    <div style="display:flex; align-items:center; gap:0.8rem; margin-bottom:1.2rem; color:var(--mute); font-size:0.8rem;">
+      <div style="flex:1; border-top:1px solid var(--card-line);"></div>
+      or enter it manually
+      <div style="flex:1; border-top:1px solid var(--card-line);"></div>
+    </div>
+
+    <form id="loginForm" class="card" style="position:relative; overflow:hidden;">
+      <div class="deco-interactive deco-dots blue" style="position:absolute; right:-15px; top:-15px; width:70px; height:60px; opacity:0.25;"></div>
+      <div class="field">
+        <label>Employee ID</label>
+        <input type="text" id="emp_id" placeholder="e.g. EMP1042" required>
+      </div>
+      <div class="field">
+        <label>Password</label>
+        <input type="password" id="password" placeholder="Your password" required>
+      </div>
+      <button type="submit" class="btn btn-primary btn-block">Log In</button>
+    </form>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/scanner.js"></script>
+<script>
+document.getElementById("loginForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("alertBox");
+  alertBox.innerHTML = "";
+  const payload = {
+    emp_id: document.getElementById("emp_id").value.trim(),
+    password: document.getElementById("password").value,
+    device_token: getDeviceToken(),
+  };
+  try {
+    const { teacher, token } = await api("/teachers/login", { method: "POST", body: payload });
+    saveTeacher(teacher, token);
+    window.location.href = teacher.role === "admin" ? "/admin-dashboard.html" : "/teacher-dashboard.html";
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  }
+});
+
+document.getElementById("scanBtn").addEventListener("click", async () => {
+  const alertBox = document.getElementById("alertBox");
+  alertBox.innerHTML = "";
+  let scannedId;
+  try {
+    scannedId = await openIdCardScanner();
+  } catch (e) {
+    return; // user cancelled
+  }
+  try {
+    const { teacher, token } = await api("/teachers/card-login", {
+      method: "POST",
+      body: { emp_id: scannedId, device_token: getDeviceToken() },
+    });
+    saveTeacher(teacher, token);
+    toast("Card recognized. Welcome back, " + teacher.name.split(" ")[0] + "!");
+    window.location.href = teacher.role === "admin" ? "/admin-dashboard.html" : "/teacher-dashboard.html";
+  } catch (err) {
+    if (err.needs_password) {
+      document.getElementById("emp_id").value = scannedId;
+      document.getElementById("password").focus();
+      alertBox.innerHTML = `<div class="alert alert-error">Card recognized, but this device needs your password once before card-only login works here.</div>`;
+      return;
+    }
+    toast("Card not registered yet — let's set up your account.");
+    window.location.href = "/teacher-register.html?emp_id=" + encodeURIComponent(scannedId);
+  }
+});
+</script>
+<p class="footer-note">Surampalem, Andhra Pradesh</p>
+<!-- University-style footer -->
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="brand-col">
+      <img src="/aditya-logo.png" alt="Aditya University">
+      <div>
+        <strong style="font-family:'Spartan',sans-serif; color:var(--au-blue-deep); font-size:1rem;">Aditya University</strong>
+        <p style="margin-top:0.3rem;">EduVault — Centralized Teacher–Student Academic Material Sharing</p>
+      </div>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <p>Call: +91 63 00 45 90 01</p>
+      <p>Email: <a href="mailto:support_tt@adityauniversity.in">support_tt@adityauniversity.in</a></p>
+      <p style="margin-top:0.5rem;">Surampalem, Kakinada District,<br>Andhra Pradesh</p>
+    </div>
+    <div>
+      <h4>Our Social Media</h4>
+      <div class="socials">
+        <a href="https://www.linkedin.com/school/adityauniversity/" target="_blank" rel="noopener" title="Aditya University – LinkedIn" aria-label="LinkedIn">in</a>
+        <a href="https://www.youtube.com/@adityauniversity" target="_blank" rel="noopener" title="Aditya University – YouTube" aria-label="YouTube">▶</a>
+        <a href="https://www.facebook.com/adityauniversity" target="_blank" rel="noopener" title="Aditya University – Facebook" aria-label="Facebook">f</a>
+        <a href="https://www.instagram.com/aditya_university/" target="_blank" rel="noopener" title="Aditya University – Instagram" aria-label="Instagram">◎</a>
+      </div>
+      <p style="margin-top:0.7rem; font-size:0.78rem; color:var(--mute); line-height:1.45;">
+        <a href="https://www.linkedin.com/company/technicalhub" target="_blank" rel="noopener" style="color:var(--au-blue);">TECHNICAL HUB</a><br>
+        Aditya University – Surampalem, A.P<br>
+        <span style="color:var(--au-orange); font-weight:600;">#AchieveWithAditya</span>
+      </p>
+    </div>
+    <div class="copy">
+      Copyright 2026 © Aditya University. All Rights Reserved
+    </div>
+  </div>
+</footer>
+</body>
+</html>

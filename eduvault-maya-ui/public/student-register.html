@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Registration — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav><a href="/student-login.html">Already registered? Log in</a></nav>
+</div>
+
+<div class="auth-page">
+  <div class="auth-deco" aria-hidden="true">
+    <div class="deco-dots deco-interactive" data-depth="0.05" style="top: 8%; left: 5%; width: 140px; height: 130px; opacity: 0.7;"></div>
+    <div class="deco-arc deco-interactive" data-depth="0.08" style="top: 10%; right: 6%; width: 170px; height: 170px; opacity: 0.75;"></div>
+    <div class="deco-blob soft deco-interactive" data-depth="0.035" style="bottom: 15%; left: -40px; width: 160px; height: 130px; opacity: 0.55;"></div>
+    <div class="deco-circle deco-interactive" data-depth="0.03" style="width: 220px; height: 220px; bottom: 8%; right: -70px;"></div>
+    <div class="deco-dots red deco-interactive" data-depth="0.06" style="bottom: 20%; right: 10%; width: 100px; height: 90px; opacity: 0.55;"></div>
+  </div>
+
+  <div class="page narrow">
+  <div class="eyebrow">Student Registration</div>
+  <h2>Create your student account</h2>
+  <p class="subtitle">This is a one-time setup. After this, scanning your ID card logs you straight in on this device — no password needed here again. A new device will still ask for your password once, to make sure it's really you.</p>
+
+  <div id="cardStatus" style="display:none;" class="alert alert-success">
+    ✓ ID card scanned — your Roll Number below was read directly from it.
+  </div>
+
+  <div id="alertBox"></div>
+
+  <form id="regForm" class="card">
+    <div class="field">
+      <label>Roll Number</label>
+      <div style="display:flex; gap:0.6rem;">
+        <input type="text" id="roll_no" placeholder="e.g. 22CS1042" required style="flex:1;">
+        <button type="button" class="btn btn-outline btn-sm" id="scanFromRegBtn" style="white-space:nowrap;">Scan Card</button>
+      </div>
+      <div class="hint" id="rollNoHint">Don't have your card handy? Type your Roll Number instead.</div>
+    </div>
+    <div class="field">
+      <label>Full Name</label>
+      <input type="text" id="name" placeholder="e.g. Priya Sharma" required>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Department</label>
+        <input type="text" id="department" placeholder="e.g. CSE" required>
+      </div>
+      <div class="field">
+        <label>Semester</label>
+        <input type="text" id="semester" placeholder="e.g. Semester 4" required>
+      </div>
+    </div>
+    <div class="field">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@college.edu" required>
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Create a password" required minlength="8">
+      <div class="hint">At least 8 characters. You'll need this once on every new device before card scanning works there — keep it safe.</div>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+  </form>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/scanner.js"></script>
+<script>
+// Coming from the login page after scanning an unrecognized card
+const params = new URLSearchParams(window.location.search);
+const preRoll = params.get("roll_no");
+if (preRoll) {
+  const input = document.getElementById("roll_no");
+  input.value = preRoll;
+  input.readOnly = true;
+  input.style.background = "#F7FAFA";
+  document.getElementById("cardStatus").style.display = "block";
+  document.getElementById("rollNoHint").textContent = "Read from your scanned card. Click \"Scan Card\" again to rescan.";
+}
+
+document.getElementById("scanFromRegBtn").addEventListener("click", async () => {
+  try {
+    const code = await openIdCardScanner();
+    const input = document.getElementById("roll_no");
+    input.value = code;
+    input.readOnly = true;
+    input.style.background = "#F7FAFA";
+    document.getElementById("cardStatus").style.display = "block";
+    toast("Roll Number read from card.");
+  } catch (e) {
+    // cancelled
+  }
+});
+
+document.getElementById("regForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("alertBox");
+  alertBox.innerHTML = "";
+  const payload = {
+    roll_no: document.getElementById("roll_no").value.trim(),
+    name: document.getElementById("name").value.trim(),
+    department: document.getElementById("department").value.trim(),
+    semester: document.getElementById("semester").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    password: document.getElementById("password").value,
+    device_token: getDeviceToken(),
+  };
+  try {
+    const { student, token } = await api("/students/register", { method: "POST", body: payload });
+    saveStudent(student, token);
+    toast("Account created. Welcome, " + student.name + "!");
+    window.location.href = "/student-portal.html";
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  }
+});
+</script>
+<p class="footer-note">Surampalem, Andhra Pradesh</p>
+</div><!-- /.auth-page -->
+<!-- University-style footer -->
+<footer class="site-footer">
+  <div class="site-footer-inner">
+    <div class="brand-col">
+      <img src="/aditya-logo.png" alt="Aditya University">
+      <div>
+        <strong style="font-family:'Spartan',sans-serif; color:var(--au-blue-deep); font-size:1rem;">Aditya University</strong>
+        <p style="margin-top:0.3rem;">EduVault — Centralized Teacher–Student Academic Material Sharing</p>
+      </div>
+    </div>
+    <div>
+      <h4>Contact</h4>
+      <p>Call: +91 63 00 45 90 01</p>
+      <p>Email: <a href="mailto:support_tt@adityauniversity.in">support_tt@adityauniversity.in</a></p>
+      <p style="margin-top:0.5rem;">Surampalem, Kakinada District,<br>Andhra Pradesh</p>
+    </div>
+    <div>
+      <h4>Our Social Media</h4>
+      <div class="socials">
+        <a href="https://www.linkedin.com/school/adityauniversity/" target="_blank" rel="noopener" title="Aditya University – LinkedIn" aria-label="LinkedIn">in</a>
+        <a href="https://www.youtube.com/@adityauniversity" target="_blank" rel="noopener" title="Aditya University – YouTube" aria-label="YouTube">▶</a>
+        <a href="https://www.facebook.com/adityauniversity" target="_blank" rel="noopener" title="Aditya University – Facebook" aria-label="Facebook">f</a>
+        <a href="https://www.instagram.com/aditya_university/" target="_blank" rel="noopener" title="Aditya University – Instagram" aria-label="Instagram">◎</a>
+      </div>
+      <p style="margin-top:0.7rem; font-size:0.78rem; color:var(--mute); line-height:1.45;">
+        <a href="https://www.linkedin.com/company/technicalhub" target="_blank" rel="noopener" style="color:var(--au-blue);">TECHNICAL HUB</a><br>
+        Aditya University – Surampalem, A.P<br>
+        <span style="color:var(--au-orange); font-weight:600;">#AchieveWithAditya</span>
+      </p>
+    </div>
+    <div class="copy">
+      Copyright 2026 © Aditya University. All Rights Reserved
+    </div>
+  </div>
+</footer>
+</body>
+</html>

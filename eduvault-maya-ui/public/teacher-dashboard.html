@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Teacher Dashboard — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav>
+    <a href="/id-card.html">My ID Card</a>
+    <span class="who" id="whoLabel"></span>
+    <button class="btn-ghost-topbar" id="logoutBtn">Log Out</button>
+  </nav>
+</div>
+
+<div class="page">
+  <div class="eyebrow">Faculty Dashboard</div>
+  <h2 id="greeting">Your Material</h2>
+  <p class="subtitle">Upload once — every student who selects your Employee ID sees it, from day one, for as long as it's here.</p>
+
+  <div id="cardBanner"></div>
+
+  <div class="grid-2" id="statRow" style="margin-bottom:1.8rem;"></div>
+
+  <div class="card">
+    <div class="section-title"><h2>Upload New Material</h2></div>
+    <div id="uploadAlert"></div>
+    <form id="uploadForm">
+      <div class="field-row">
+        <div class="field">
+          <label>Subject</label>
+          <input type="text" id="subject" placeholder="e.g. Database Management Systems" required>
+        </div>
+        <div class="field">
+          <label>Unit / Topic</label>
+          <input type="text" id="unit" placeholder="e.g. Unit 3 — Normalization">
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Title</label>
+          <input type="text" id="title" placeholder="e.g. Normal Forms — Slides" required>
+        </div>
+        <div class="field">
+          <label>Semester</label>
+          <input type="text" id="semester" placeholder="e.g. Semester 4">
+        </div>
+      </div>
+      <div class="field">
+        <label>
+  File (PDF, PPT/PPTX, DOC/DOCX, TXT, CSV, XLS/XLSX, ZIP, RAR, 7Z,
+  JPG, PNG, GIF, WEBP, MP3, WAV, MP4, WEBM — max 200MB)
+</label>
+        <input
+  type="file"
+  id="file"
+  accept=".pdf,.ppt,.pptx,.doc,.docx,.txt,.csv,.xls,.xlsx,.zip,.rar,.7z,.jpg,.jpeg,.png,.gif,.webp,.mp3,.wav,.mp4,.webm,.py,.java,.cpp,.c"
+  required
+>
+      </div>
+      <button type="submit" class="btn btn-accent" id="uploadBtn">Upload Material</button>
+
+      <div id="uploadProgressWrap" style="display:none;">
+        <div class="progress-track">
+          <div class="progress-fill" id="uploadProgressFill"></div>
+        </div>
+        <div class="progress-label">
+          <span id="uploadProgressText">0%</span>
+          <span id="uploadProgressSpeed"></span>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-title">
+    <h2>Your Uploaded Material</h2>
+    <span class="pill" id="countPill">0 files</span>
+  </div>
+  <div id="materialList"></div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/scanner.js"></script>
+<script>
+const teacher = requireTeacher();
+if (teacher && teacher.role === "admin") {
+  // Admins have their own dashboard -- send them there instead (e.g. if
+  // they land here via a bookmark or the back button).
+  window.location.href = "/admin-dashboard.html";
+}
+document.getElementById("whoLabel").textContent = `${teacher.name} · ${teacher.emp_id}`;
+document.getElementById("greeting").textContent = `Welcome, ${teacher.name.split(" ")[0] || teacher.name}`;
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  clearTeacher();
+  window.location.href = "/";
+});
+
+document.getElementById("cardBanner").innerHTML = `
+  <div class="alert alert-success">
+    Tip: On the login page, tap "Scan ID Card" and hold up your staff ID — since it's issued for
+    Employee ID <strong>${escapeHtml(teacher.emp_id)}</strong>, it'll log you in instantly, no password needed.
+  </div>`;
+
+async function loadMaterials() {
+  try {
+    const { materials } = await api(`/teachers/${encodeURIComponent(teacher.emp_id)}/analytics`);
+    renderStats(materials);
+    renderList(materials);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function renderStats(materials) {
+  const totalAccess = materials.reduce((sum, m) => sum + (m.access_count || 0), 0);
+  const subjects = new Set(materials.map((m) => m.subject)).size;
+  document.getElementById("statRow").innerHTML = `
+    <div class="stat-box"><div class="num">${materials.length}</div><div class="lbl">Files uploaded</div></div>
+    <div class="stat-box"><div class="num">${subjects}</div><div class="lbl">Subjects covered</div></div>
+    <div class="stat-box"><div class="num">${totalAccess}</div><div class="lbl">Total student accesses</div></div>
+  `;
+}
+
+function renderList(materials) {
+  document.getElementById("countPill").textContent = `${materials.length} file${materials.length === 1 ? "" : "s"}`;
+  const container = document.getElementById("materialList");
+  if (materials.length === 0) {
+    container.innerHTML = `<div class="empty"><div class="icon">＋</div>Nothing uploaded yet. Add your first file above.</div>`;
+    return;
+  }
+  container.innerHTML = materials.map((m) => `
+    <div class="index-card">
+      <div class="badge">${fileIcon(m.original_name)}</div>
+      <div class="meta">
+        <div class="title">${escapeHtml(m.title)}</div>
+        <div class="sub">${escapeHtml(m.subject)}${m.unit ? " · " + escapeHtml(m.unit) : ""}${m.semester ? " · " + escapeHtml(m.semester) : ""} · Uploaded ${fmtDate(m.upload_date)} · ${m.access_count} view${m.access_count === 1 ? "" : "s"}</div>
+      </div>
+      <div class="actions">
+        <a class="btn btn-outline btn-sm" href="${m.file_url}" target="_blank">View</a>
+        <button class="btn btn-danger btn-sm" onclick="removeMaterial('${m.material_id}')">Delete</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+async function removeMaterial(id) {
+  if (!confirm("Delete this material? This cannot be undone.")) return;
+  try {
+    await api(`/materials/${id}`, { method: "DELETE", body: {} });
+    toast("Material deleted.");
+    loadMaterials();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("uploadAlert");
+  const btn = document.getElementById("uploadBtn");
+  alertBox.innerHTML = "";
+  const fileInput = document.getElementById("file");
+  if (!fileInput.files.length) {
+    alertBox.innerHTML = `<div class="alert alert-error">Please choose a file.</div>`;
+    return;
+  }
+  const fd = new FormData();
+  fd.append("subject", document.getElementById("subject").value.trim());
+  fd.append("unit", document.getElementById("unit").value.trim());
+  fd.append("title", document.getElementById("title").value.trim());
+  fd.append("semester", document.getElementById("semester").value.trim());
+  fd.append("file", fileInput.files[0]);
+
+  const wrap = document.getElementById("uploadProgressWrap");
+  const fill = document.getElementById("uploadProgressFill");
+  const pctText = document.getElementById("uploadProgressText");
+  const speedText = document.getElementById("uploadProgressSpeed");
+
+  btn.disabled = true;
+  btn.textContent = "Uploading…";
+  wrap.style.display = "block";
+  fill.style.width = "0%";
+  pctText.textContent = "0%";
+  speedText.textContent = "";
+
+  const startTime = performance.now();
+
+  try {
+    await apiUpload("/materials/upload", fd, ({ loaded, total, percent }) => {
+      fill.style.width = percent.toFixed(0) + "%";
+      pctText.textContent = percent.toFixed(0) + "%";
+
+      const elapsedSec = (performance.now() - startTime) / 1000;
+      if (elapsedSec > 0.2) {
+        const bytesPerSec = loaded / elapsedSec;
+        speedText.textContent = `${formatBytes(bytesPerSec)}/s · ${formatBytes(loaded)} of ${formatBytes(total)}`;
+      }
+    });
+    fill.style.width = "100%";
+    pctText.textContent = "100%";
+    toast("Material uploaded.");
+    document.getElementById("uploadForm").reset();
+    loadMaterials();
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Upload Material";
+    setTimeout(() => { wrap.style.display = "none"; }, 900);
+  }
+});
+
+loadMaterials();
+</script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Student Portal — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+  .search-wrap { position: relative; }
+  .suggest-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: #fff; border: 1px solid var(--card-line); border-radius: 8px;
+    box-shadow: var(--shadow); max-height: 280px; overflow-y: auto; z-index: 10;
+  }
+  .suggest-item { padding: 0.7rem 0.9rem; cursor: pointer; border-bottom: 1px solid #F1F5F4; }
+  .suggest-item:last-child { border-bottom: none; }
+  .suggest-item:hover { background: var(--card); }
+  .suggest-item .n { font-weight: 600; font-size: 0.9rem; }
+  .suggest-item .e { font-size: 0.78rem; color: var(--mute); }
+  .teacher-header {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card); border-radius: var(--radius); padding: 1.1rem 1.3rem; margin-bottom: 1.4rem;
+  }
+  .teacher-header .th-info .n { font-weight: 700; font-size: 1.1rem; color: var(--deep); }
+  .teacher-header .th-info .d { font-size: 0.82rem; color: var(--mute); }
+  .bookmark-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.6rem; }
+  .bookmark-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    background: #fff; border: 1px solid var(--card-line); border-radius: 20px;
+    padding: 0.35rem 0.8rem 0.35rem 0.6rem; font-size: 0.82rem; cursor: pointer;
+  }
+  .bookmark-chip:hover { border-color: var(--primary); }
+</style>
+<script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav>
+    <span class="who" id="whoLabel"></span>
+    <button class="btn-ghost-topbar" id="logoutBtn">Log Out</button>
+  </nav>
+</div>
+
+<div class="page">
+  <div class="eyebrow">Student Portal</div>
+  <h2>Find your teacher's material</h2>
+  <p class="subtitle">Search by Employee ID or name. You'll see everything they've ever shared — including anything posted before you joined.</p>
+
+  <div id="cardBanner"></div>
+
+  <div class="search-wrap card" style="margin-bottom:0.6rem;">
+    <div class="field" style="margin-bottom:0;">
+      <label>Employee ID or Teacher Name</label>
+      <input type="text" id="searchInput" placeholder="e.g. EMP1042 or Anitha Rao" autocomplete="off">
+    </div>
+    <div id="suggestList" class="suggest-list" style="display:none;"></div>
+  </div>
+
+  <div id="bookmarkSection"></div>
+
+  <div id="resultArea" style="margin-top:1.6rem;"></div>
+</div>
+
+<script src="/js/common.js"></script>
+<script src="/js/scanner.js"></script>
+<script>
+const student = requireStudent();
+document.getElementById("whoLabel").textContent = `${student.name} · ${student.roll_no}`;
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  clearStudent();
+  window.location.href = "/";
+});
+
+document.getElementById("cardBanner").innerHTML = `
+  <div class="alert alert-success">
+    Tip: On the login page, tap "Scan ID Card" and hold up your student ID — since it's issued for
+    Roll Number <strong>${escapeHtml(student.roll_no)}</strong>, it'll log you in instantly, no password needed.
+  </div>`;
+
+const searchInput = document.getElementById("searchInput");
+const suggestList = document.getElementById("suggestList");
+let searchTimer;
+
+searchInput.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (!q) { suggestList.style.display = "none"; return; }
+  searchTimer = setTimeout(async () => {
+    try {
+      const { teachers } = await api(`/teachers?q=${encodeURIComponent(q)}`);
+      renderSuggestions(teachers);
+    } catch (err) {
+      toast(err.message, true);
+    }
+  }, 200);
+});
+
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".search-wrap")) suggestList.style.display = "none";
+});
+
+function renderSuggestions(teachers) {
+  if (!teachers.length) {
+    suggestList.style.display = "block";
+    suggestList.innerHTML = `<div class="suggest-item" style="color:var(--mute);">No teacher matches that search.</div>`;
+    return;
+  }
+  suggestList.style.display = "block";
+  suggestList.innerHTML = teachers.map((t) => `
+    <div class="suggest-item" onclick="selectTeacher('${t.emp_id}')">
+      <div class="n">${escapeHtml(t.name)}</div>
+      <div class="e">${escapeHtml(t.emp_id)} · ${escapeHtml(t.department)}</div>
+    </div>
+  `).join("");
+}
+
+async function selectTeacher(emp_id) {
+  suggestList.style.display = "none";
+  searchInput.value = "";
+  try {
+    const { teacher, materials } = await api(`/materials/teacher/${encodeURIComponent(emp_id)}`);
+    renderTeacherResult(teacher, materials);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+function renderTeacherResult(teacher, materials) {
+  const bookmarked = (student.bookmarked_teachers || []).includes(teacher.emp_id);
+  const area = document.getElementById("resultArea");
+
+  let listHtml;
+  if (materials.length === 0) {
+    listHtml = `<div class="empty"><div class="icon">＋</div>${escapeHtml(teacher.name)} hasn't uploaded any material yet.</div>`;
+  } else {
+    // Group by subject
+    const bySubject = {};
+    materials.forEach((m) => {
+      const key = m.subject || "General";
+      (bySubject[key] = bySubject[key] || []).push(m);
+    });
+    listHtml = Object.entries(bySubject).map(([subject, items]) => `
+      <div class="section-title" style="margin-top:1.4rem;"><h2 style="font-size:1.02rem;">${escapeHtml(subject)}</h2><span class="pill">${items.length}</span></div>
+      ${items.map((m) => `
+        <div class="index-card">
+          <div class="badge">${fileIcon(m.original_name)}</div>
+          <div class="meta">
+            <div class="title">${escapeHtml(m.title)}</div>
+            <div class="sub">${m.unit ? escapeHtml(m.unit) + " · " : ""}${m.semester ? escapeHtml(m.semester) + " · " : ""}Shared ${fmtDate(m.upload_date)}</div>
+          </div>
+          <div class="actions">
+  <a
+    class="btn btn-outline btn-sm"
+    href="${m.file_url}"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    View
+  </a>
+
+  <a
+    class="btn btn-accent btn-sm"
+    href="/api/materials/download/${m.material_id}?token=${encodeURIComponent(getStudentToken())}"
+  >
+    Download
+  </a>
+</div>
+        </div>
+      `).join("")}
+    `).join("");
+  }
+
+  area.innerHTML = `
+    <div class="teacher-header">
+      <div class="th-info">
+        <div class="n">${escapeHtml(teacher.name)}</div>
+        <div class="d">${escapeHtml(teacher.emp_id)} · ${escapeHtml(teacher.department)}${teacher.subjects_handled ? " · " + escapeHtml(teacher.subjects_handled) : ""}</div>
+      </div>
+      <button class="star-btn" id="bookmarkBtn" title="Bookmark this teacher">${bookmarked ? "★" : "☆"}</button>
+    </div>
+    ${listHtml}
+  `;
+
+  document.getElementById("bookmarkBtn").addEventListener("click", async () => {
+    try {
+      const { bookmarked_teachers } = await api(`/students/${encodeURIComponent(student.roll_no)}/bookmark`, {
+        method: "POST", body: { emp_id: teacher.emp_id },
+      });
+      student.bookmarked_teachers = bookmarked_teachers;
+      saveStudent(student, getStudentToken());
+      renderTeacherResult(teacher, materials);
+      renderBookmarks();
+    } catch (err) {
+      toast(err.message, true);
+    }
+  });
+}
+
+async function renderBookmarks() {
+  const section = document.getElementById("bookmarkSection");
+  const ids = student.bookmarked_teachers || [];
+  if (!ids.length) { section.innerHTML = ""; return; }
+  try {
+    const results = await Promise.all(ids.map((id) => api(`/teachers/${encodeURIComponent(id)}`).catch(() => null)));
+    const valid = results.filter(Boolean).map((r) => r.teacher);
+    section.innerHTML = `
+      <div style="margin-top:1.2rem;">
+        <div class="eyebrow" style="margin-bottom:0.5rem;">Bookmarked Teachers</div>
+        <div class="bookmark-row">
+          ${valid.map((t) => `<div class="bookmark-chip" onclick="selectTeacher('${t.emp_id}')">★ ${escapeHtml(t.name)}</div>`).join("")}
+        </div>
+      </div>
+    `;
+  } catch (err) {
+    section.innerHTML = "";
+  }
+}
+
+renderBookmarks();
+</script>
+</body>
+</html>

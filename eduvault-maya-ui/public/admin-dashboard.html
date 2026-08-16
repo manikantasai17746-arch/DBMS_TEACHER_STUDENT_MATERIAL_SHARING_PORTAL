@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Dashboard — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav>
+    <a href="/id-card.html">My ID Card</a>
+    <span class="who" id="whoLabel"></span>
+    <button class="btn-ghost-topbar" id="logoutBtn">Log Out</button>
+  </nav>
+</div>
+
+<div class="page">
+  <div class="eyebrow">System Administration</div>
+  <h2 id="greeting">Admin Dashboard</h2>
+  <p class="subtitle">Send invitations to new faculty, and manage every employee and student account on EduVault.</p>
+
+  <div class="grid-2" id="statRow" style="grid-template-columns: repeat(3, 1fr); margin-bottom:1.8rem;"></div>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="codes">Invitations</button>
+    <button class="tab-btn" data-tab="employees">Employees</button>
+    <button class="tab-btn" data-tab="students">Students</button>
+  </div>
+
+  <!-- ===================== ENROLLMENT CODES ===================== -->
+  <div class="tab-panel active" id="panel-codes">
+    <div class="card" style="margin-bottom:1.4rem;">
+      <div class="section-title"><h2>Send an Invitation</h2></div>
+      <div id="issueAlert"></div>
+      <form id="issueForm">
+        <div class="field-row">
+          <div class="field">
+            <label>Employee Email</label>
+            <input type="email" id="issueEmail" placeholder="teacher@gmail.com" required>
+          </div>
+          <div class="field">
+            <label>Name (optional)</label>
+            <input type="text" id="issueName" placeholder="e.g. Dr. Anitha Rao">
+          </div>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label>Department (optional)</label>
+            <input type="text" id="issueDept" placeholder="e.g. Computer Science & Engineering">
+          </div>
+          <div class="field">
+            <label>Employee ID (optional)</label>
+            <input type="text" id="issueEmpId" placeholder="e.g. EMP1042">
+          </div>
+        </div>
+        <button type="submit" class="btn btn-accent" id="issueBtn">Send Invitation</button>
+      </form>
+    </div>
+
+    <div class="section-title"><h2>All Invitations</h2><span class="pill" id="codesCountPill">0</span></div>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Email</th><th>Employee ID</th><th>Department</th><th>Status</th><th>Sent</th><th>Note</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="codesTbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="codesEmpty" style="display:none; margin-top:1rem;">No invitations have been sent yet.</div>
+  </div>
+
+  <!-- ===================== EMPLOYEES ===================== -->
+  <div class="tab-panel" id="panel-employees">
+    <div class="section-title"><h2>Employees</h2><span class="pill" id="teachersCountPill">0</span></div>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Employee ID</th><th>Name</th><th>Department</th><th>Role</th><th>Status</th><th>Email Verified</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="teachersTbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="teachersEmpty" style="display:none; margin-top:1rem;">No employees registered yet.</div>
+  </div>
+
+  <!-- ===================== STUDENTS ===================== -->
+  <div class="tab-panel" id="panel-students">
+    <div class="section-title"><h2>Students</h2><span class="pill" id="studentsCountPill">0</span></div>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr><th>Roll No</th><th>Name</th><th>Department</th><th>Semester</th><th>Status</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="studentsTbody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="studentsEmpty" style="display:none; margin-top:1rem;">No students registered yet.</div>
+  </div>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+const admin = requireTeacher();
+if (admin && admin.role !== "admin") {
+  // Not an admin -- this page (and every /api/admin/* call) isn't for them.
+  window.location.href = "/teacher-dashboard.html";
+}
+
+document.getElementById("whoLabel").textContent = `${admin.name} · ${admin.emp_id}`;
+document.getElementById("greeting").textContent = `Welcome, ${admin.name.split(" ")[0] || admin.name}`;
+document.getElementById("logoutBtn").addEventListener("click", () => {
+  clearTeacher();
+  window.location.href = "/";
+});
+
+// ---- Tabs -----------------------------------------------------------
+document.querySelectorAll(".tab-btn").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelectorAll(".tab-panel").forEach((p) => p.classList.remove("active"));
+    btn.classList.add("active");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("active");
+  });
+});
+
+function statusPillHtml(status, activeLabel, inactiveLabel) {
+  const map = {
+    active: ["status-active", activeLabel || "Active"],
+    inactive: ["status-inactive", inactiveLabel || "Inactive"],
+    used: ["status-used", "Used"],
+    expired: ["status-expired", "Expired"],
+    revoked: ["status-revoked", "Revoked"],
+  };
+  const [cls, label] = map[status] || ["status-used", status];
+  return `<span class="status-pill ${cls}">${label}</span>`;
+}
+
+// ---- Overview stats ---------------------------------------------------
+function renderStats(codes, teachers, students) {
+  const activeCodes = codes.filter((c) => c.status === "pending" || c.status === "active").length;
+  document.getElementById("statRow").innerHTML = `
+    <div class="stat-box"><div class="num">${teachers.length}</div><div class="lbl">Employees</div></div>
+    <div class="stat-box"><div class="num">${students.length}</div><div class="lbl">Students</div></div>
+    <div class="stat-box"><div class="num">${activeCodes}</div><div class="lbl">Pending invitations</div></div>
+  `;
+}
+
+// ---- Enrollment Codes ---------------------------------------------------
+async function loadCodes() {
+  const { invitations } = await api("/admin/invitations");
+  document.getElementById("codesCountPill").textContent = invitations.length;
+  document.getElementById("codesEmpty").style.display = invitations.length ? "none" : "block";
+  document.getElementById("codesTbody").innerHTML = invitations.map((c) => `
+    <tr>
+      <td>${escapeHtml(c.email)}</td>
+      <td>${escapeHtml(c.employee_id || "—")}</td>
+      <td>${escapeHtml(c.department || "—")}</td>
+      <td>${statusPillHtml(c.status === "pending" ? "active" : c.status)}</td>
+      <td>${fmtDate(c.created_at)}</td>
+      <td>—</td>
+      <td class="table-actions">
+        ${c.status === "pending"
+          ? `<button class="btn btn-danger btn-sm" onclick="revokeCode('${c.id}')">Revoke</button>`
+          : `<span class="hint">—</span>`}
+      </td>
+    </tr>
+  `).join("");
+  return invitations;
+}
+
+document.getElementById("issueForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alertBox = document.getElementById("issueAlert");
+  const btn = document.getElementById("issueBtn");
+  alertBox.innerHTML = "";
+  const payload = {
+    email: document.getElementById("issueEmail").value.trim(),
+    name: document.getElementById("issueName").value.trim(),
+    department: document.getElementById("issueDept").value.trim(),
+    emp_id: document.getElementById("issueEmpId").value.trim(),
+  };
+  btn.disabled = true;
+  btn.textContent = "Sending…";
+  try {
+    await api("/admin/invitations", { method: "POST", body: payload });
+    alertBox.innerHTML = `<div class="alert alert-success">✓ Invitation sent to ${escapeHtml(payload.email)}. Employee must open register page and click Send verification code.</div>`;
+    document.getElementById("issueForm").reset();
+    refreshAll();
+  } catch (err) {
+    alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send Invitation";
+  }
+});
+
+async function revokeCode(id) {
+  if (!confirm("Revoke this invitation? The employee will no longer be able to request a code.")) return;
+  try {
+    await api(`/admin/invitations/${id}/revoke`, { method: "POST", body: {} });
+    toast("Invitation revoked.");
+    refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// ---- Employees ---------------------------------------------------------
+async function loadTeachers() {
+  const { teachers } = await api("/admin/teachers");
+  document.getElementById("teachersCountPill").textContent = teachers.length;
+  renderTeacherRows(teachers);
+  return teachers;
+}
+
+function renderTeacherRows(teachers) {
+  document.getElementById("teachersEmpty").style.display = teachers.length ? "none" : "block";
+  document.getElementById("teachersTbody").innerHTML = teachers.map((t) => {
+    const isSelf = t.emp_id === admin.emp_id;
+    const roleOptions = ["teacher", "admin"].map((r) =>
+      `<option value="${r}" ${t.role === r ? "selected" : ""}>${r === "admin" ? "Admin" : "Teacher"}</option>`
+    ).join("");
+    return `
+    <tr>
+      <td>${escapeHtml(t.emp_id)}</td>
+      <td>${escapeHtml(t.name)}</td>
+      <td>${escapeHtml(t.department || "—")}</td>
+      <td>
+        ${t.seeded
+          ? `<span class="role-badge role-admin">Admin</span>`
+          : `<select class="role-select" ${isSelf ? "disabled" : ""} onchange="changeRole('${t.emp_id}', this.value)">${roleOptions}</select>`}
+      </td>
+      <td>${statusPillHtml(t.active ? "active" : "inactive")}</td>
+      <td>${statusPillHtml(t.email_verified ? "active" : "inactive", "Verified", "Unverified")}</td>
+      <td class="table-actions">
+        <a class="btn btn-outline btn-sm" href="/id-card.html?emp_id=${encodeURIComponent(t.emp_id)}">ID Card</a>
+        ${t.seeded ? "" : `
+          <button class="btn btn-sm ${t.active ? "btn-danger" : "btn-outline"}" onclick="toggleTeacherActive('${t.emp_id}', ${!t.active})">
+            ${t.active ? "Deactivate" : "Activate"}
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="removeTeacher('${t.emp_id}')">Delete</button>
+        `}
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+async function toggleTeacherActive(emp_id, active) {
+  try {
+    await api(`/admin/teachers/${encodeURIComponent(emp_id)}/active`, { method: "PATCH", body: { active } });
+    toast(active ? "Employee activated." : "Employee deactivated.");
+    loadTeachers();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function changeRole(emp_id, role) {
+  try {
+    await api(`/admin/teachers/${encodeURIComponent(emp_id)}/role`, { method: "PATCH", body: { role } });
+    toast(`Role updated to ${role}.`);
+    loadTeachers();
+  } catch (err) {
+    toast(err.message, true);
+    loadTeachers(); // reset the dropdown to the real value
+  }
+}
+
+async function removeTeacher(emp_id) {
+  if (!confirm(`Delete employee ${emp_id}? This cannot be undone.`)) return;
+  try {
+    await api(`/admin/teachers/${encodeURIComponent(emp_id)}`, { method: "DELETE", body: {} });
+    toast("Employee deleted.");
+    refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// ---- Students ------------------------------------------------------------
+async function loadStudents() {
+  const { students } = await api("/admin/students");
+  document.getElementById("studentsCountPill").textContent = students.length;
+  document.getElementById("studentsEmpty").style.display = students.length ? "none" : "block";
+  document.getElementById("studentsTbody").innerHTML = students.map((s) => `
+    <tr>
+      <td>${escapeHtml(s.roll_no)}</td>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(s.department || "—")}</td>
+      <td>${escapeHtml(s.semester || "—")}</td>
+      <td>${statusPillHtml(s.active ? "active" : "inactive")}</td>
+      <td class="table-actions">
+        <button class="btn btn-sm ${s.active ? "btn-danger" : "btn-outline"}" onclick="toggleStudentActive('${s.roll_no}', ${!s.active})">
+          ${s.active ? "Deactivate" : "Activate"}
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="removeStudent('${s.roll_no}')">Delete</button>
+      </td>
+    </tr>
+  `).join("");
+  return students;
+}
+
+async function toggleStudentActive(roll_no, active) {
+  try {
+    await api(`/admin/students/${encodeURIComponent(roll_no)}/active`, { method: "PATCH", body: { active } });
+    toast(active ? "Student activated." : "Student deactivated.");
+    loadStudents();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+async function removeStudent(roll_no) {
+  if (!confirm(`Delete student ${roll_no}? This cannot be undone.`)) return;
+  try {
+    await api(`/admin/students/${encodeURIComponent(roll_no)}`, { method: "DELETE", body: {} });
+    toast("Student deleted.");
+    refreshAll();
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// ---- Load everything -----------------------------------------------------
+async function refreshAll() {
+  try {
+    const [codes, teachers, students] = await Promise.all([loadCodes(), loadTeachers(), loadStudents()]);
+    renderStats(codes, teachers, students);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+refreshAll();
+</script>
+</body>
+</html>

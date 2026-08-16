@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ID Card — EduVault · Aditya University</title>
+<link rel="stylesheet" href="/css/style.css">
+<!-- Client-side barcode rendering, same CDN-loaded-library pattern the app
+     already uses for camera scanning (see js/scanner.js loading ZXing). -->
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+</head>
+<body>
+
+<div class="topbar">
+  <a href="/" style="text-decoration:none;"><div class="brand"><img src="/aditya-logo.png" alt="Aditya University" class="brand-logo"><div class="brand-text"><span class="app">EduVault</span></div></div></a>
+  <nav id="navLinks"></nav>
+</div>
+
+<div class="page narrow">
+  <div class="eyebrow">Identity Card</div>
+  <h2 id="pageTitle">Your ID Card</h2>
+  <p class="subtitle" id="pageSubtitle">This barcode is exactly what the "Scan ID Card" login reads — print this
+     onto a physical card, or just show this screen to a scanner.</p>
+
+  <div id="alertBox"></div>
+
+  <div class="id-card-wrap">
+    <div class="id-card" id="cardEl" style="display:none;">
+      <div class="id-card-head">
+        <div class="id-card-brand"><span class="stamp">EV</span> EduVault</div>
+        <div class="id-card-role" id="cardRole"></div>
+      </div>
+      <div class="id-card-photo" id="cardInitial"></div>
+      <div class="id-card-name" id="cardName"></div>
+      <div class="id-card-dept" id="cardDept"></div>
+      <div class="id-card-row"><span>ID</span><span id="cardId"></span></div>
+      <div class="id-card-row" id="cardSubjectsRow" style="display:none;"><span>Subjects</span><span id="cardSubjects"></span></div>
+      <div class="id-card-barcode">
+        <svg id="barcodeSvg"></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="no-print" style="display:flex; gap:0.7rem; justify-content:center; margin-top:1.4rem;">
+    <button class="btn btn-primary" id="printBtn">Print ID Card</button>
+    <a class="btn btn-outline" id="backLink" href="/teacher-dashboard.html">Back to Dashboard</a>
+  </div>
+
+  <p class="footer-note no-print">Cut along the card edge after printing on cardstock, or laminate for a durable
+     staff/admin ID. The barcode encodes the Employee ID exactly as scanned at login — nothing else is embedded in it.</p>
+</div>
+
+<script src="/js/common.js"></script>
+<script>
+const params = new URLSearchParams(window.location.search);
+const queriedEmpId = params.get("emp_id");
+
+const viewer = getTeacher(); // may be null if not logged in and viewing via a shared/admin link
+if (viewer) {
+  document.getElementById("navLinks").innerHTML = `
+    <a href="${viewer.role === "admin" ? "/admin-dashboard.html" : "/teacher-dashboard.html"}">Back to Dashboard</a>`;
+}
+
+function initials(name) {
+  return String(name || "")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join("");
+}
+
+function renderCard(teacher, { ownCard }) {
+  document.getElementById("pageTitle").textContent = ownCard ? "Your ID Card" : `ID Card — ${teacher.name}`;
+  document.getElementById("cardRole").textContent = teacher.role === "admin" ? "Administrator" : "Faculty";
+  document.getElementById("cardInitial").textContent = initials(teacher.name) || "EV";
+  document.getElementById("cardName").textContent = teacher.name;
+  document.getElementById("cardDept").textContent = teacher.department || "—";
+  document.getElementById("cardId").textContent = teacher.emp_id;
+  if (teacher.subjects_handled) {
+    document.getElementById("cardSubjectsRow").style.display = "flex";
+    document.getElementById("cardSubjects").textContent = teacher.subjects_handled;
+  }
+  document.getElementById("cardEl").style.display = "block";
+  document.getElementById("backLink").href = viewer
+    ? (viewer.role === "admin" ? "/admin-dashboard.html" : "/teacher-dashboard.html")
+    : "/";
+
+  try {
+    JsBarcode("#barcodeSvg", teacher.emp_id, {
+      format: "CODE128",
+      lineColor: "#023436",
+      width: 2,
+      height: 46,
+      displayValue: true,
+      fontSize: 12,
+      margin: 4,
+    });
+  } catch (e) {
+    document.getElementById("alertBox").innerHTML =
+      `<div class="alert alert-error">Couldn't generate the barcode graphic, but the ID above is still correct.</div>`;
+  }
+}
+
+async function load() {
+  const alertBox = document.getElementById("alertBox");
+
+  // An emp_id in the URL (used by the admin dashboard's "ID Card" link)
+  // always wins -- it's how an admin prints a card for someone else.
+  // Otherwise, this is "my own card", which requires being logged in.
+  if (queriedEmpId) {
+    try {
+      const { teacher } = await api(`/teachers/${encodeURIComponent(queriedEmpId)}`);
+      renderCard(teacher, { ownCard: viewer && viewer.emp_id === teacher.emp_id });
+    } catch (err) {
+      alertBox.innerHTML = `<div class="alert alert-error">${escapeHtml(err.message)}</div>`;
+    }
+    return;
+  }
+
+  const teacher = requireTeacher();
+  if (!teacher) return; // requireTeacher already redirected to login
+  renderCard(teacher, { ownCard: true });
+}
+
+document.getElementById("printBtn").addEventListener("click", () => window.print());
+
+load();
+</script>
+</body>
+</html>
