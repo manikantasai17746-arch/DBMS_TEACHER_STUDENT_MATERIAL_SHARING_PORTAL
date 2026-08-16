@@ -13,6 +13,31 @@ const rateLimit = require("../lib/rateLimit");
 const { toSafeFilename, contentDisposition } = require("../lib/filename");
 const storage = require("../lib/storage");
 
+async function withDbRetry(fn, label) {
+  let last;
+  for (let i = 1; i <= 3; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      const msg = String(e && e.message ? e.message : e);
+      if (
+        i < 3 &&
+        /ssl|tls|ECONNRESET|timeout|EPROTO|handshake|Connection terminated|too many clients/i.test(
+          msg
+        )
+      ) {
+        console.warn(`[eduvault] ${label} retry ${i}/3:`, msg.slice(0, 160));
+        await new Promise((r) => setTimeout(r, 300 * i));
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw last;
+}
+
+
 // ---------------------------------------------------------------------------
 // TEMP UPLOAD DIRECTORY
 // ---------------------------------------------------------------------------
@@ -211,7 +236,10 @@ router.post(
 
         // IMPORTANT:
         // findTeacher() is async in db.js
-        const account = await db.findTeacher(emp_id);
+        const account = await withDbRetry(
+          () => db.findTeacher(emp_id),
+          "findTeacher"
+        );
 
         if (!account || !account.email_verified) {
           cleanupTemp();
@@ -273,15 +301,19 @@ router.post(
 
         // IMPORTANT:
         // addMaterial() is async in db.js
-        const material = await db.addMaterial({
-          emp_id,
-          subject,
-          title,
-          unit,
-          semester,
-          file_url: `/uploads/${storedKey}`,
-          original_name: req.file.originalname,
-        });
+        const material = await withDbRetry(
+          () =>
+            db.addMaterial({
+              emp_id,
+              subject,
+              title,
+              unit,
+              semester,
+              file_url: `/uploads/${storedKey}`,
+              original_name: req.file.originalname,
+            }),
+          "addMaterial"
+        );
 
         // Temporary file has already been moved to permanent storage.
         // Prevent cleanup from deleting the permanent file.
