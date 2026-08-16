@@ -9,8 +9,10 @@ const { Pool } = require("pg");
 // Connection pool - works with both local PostgreSQL and Supabase
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://localhost/eduvault",
-  // For Supabase, the DATABASE_URL includes all connection details
-  // For local dev: postgresql://user:password@localhost:5432/eduvault
+  // Supabase requires SSL. Local Postgres usually does not.
+  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes("supabase")
+    ? { rejectUnauthorized: false }
+    : undefined,
 });
 
 // Handle connection errors
