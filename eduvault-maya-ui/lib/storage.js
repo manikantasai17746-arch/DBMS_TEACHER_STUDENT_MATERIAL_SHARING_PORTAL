@@ -40,12 +40,37 @@ const { pipeline } = require("stream/promises");
 
 const DRIVER = (process.env.STORAGE_DRIVER || "local").trim().toLowerCase();
 
-const LOCAL_UPLOAD_DIR = process.env.UPLOAD_DIR
-  ? path.resolve(process.env.UPLOAD_DIR)
+// On Vercel the project filesystem is read-only except /tmp.
+// Local driver still works for demos but files are lost when the instance
+// recycles — set STORAGE_DRIVER=s3 (or R2/B2) for real persistence.
+const isVercel = !!process.env.VERCEL;
+const defaultLocalDir = isVercel
+  ? path.join("/tmp", "eduvault-uploads")
   : path.join(__dirname, "..", "uploads");
 
-if (DRIVER === "local" && !fs.existsSync(LOCAL_UPLOAD_DIR)) {
-  fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+const LOCAL_UPLOAD_DIR = process.env.UPLOAD_DIR
+  ? path.resolve(process.env.UPLOAD_DIR)
+  : defaultLocalDir;
+
+if (DRIVER === "local") {
+  try {
+    if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
+      fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+    }
+  } catch (e) {
+    console.error(
+      "[eduvault] Cannot create local upload dir:",
+      LOCAL_UPLOAD_DIR,
+      e.message,
+      "— set STORAGE_DRIVER=s3 and S3_* env vars on Vercel."
+    );
+  }
+  if (isVercel && !process.env.UPLOAD_DIR) {
+    console.warn(
+      "[eduvault] STORAGE_DRIVER=local on Vercel uses ephemeral /tmp. " +
+        "Uploads will disappear after cold starts. Prefer STORAGE_DRIVER=s3."
+    );
+  }
 }
 
 // ---- S3 driver (lazy-loaded so @aws-sdk/client-s3 is optional) -----------
