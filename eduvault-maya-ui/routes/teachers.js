@@ -33,7 +33,7 @@ router.post("/enrollment/request", enrollmentRequestLimiter, async (req, res) =>
     }
 
     // Must have a valid (pending) invitation from admin first
-    const invitation = db.findActiveInvitation(email);
+const invitation = await db.findActiveInvitation(email);
     if (!invitation) {
       return res.status(403).json({
         error:
@@ -93,24 +93,51 @@ const { code, record } = await db.createEnrollmentCode({
 // enrollment_token bound to that exact email. /register below refuses to
 // create an account without a valid token for the same email -- so this
 // check cannot be skipped by calling /register directly.
-router.post("/enrollment/verify", enrollmentVerifyLimiter, (req, res) => {
-  const { email, code } = req.body;
-  if (!email || !code) {
-    return res.status(400).json({ error: "Email and enrollment code are required." });
-  }
-  const result = db.verifyEnrollmentCode(email, code);
-  if (!result.ok) {
-    if (result.reason === "expired") {
-      return res.status(410).json({ error: "This enrollment code has expired. Please request a new code." });
-    }
-    if (result.reason === "locked") {
-      return res.status(429).json({ error: "Too many incorrect attempts. Please request a new code." });
-    }
-    return res.status(400).json({ error: "Invalid enrollment code. Please check the code sent to your email." });
-  }
+router.post("/enrollment/verify", enrollmentVerifyLimiter, async (req, res) => {
+  try {
+    const { email, code } = req.body;
 
-  const enrollment_token = issueEnrollmentToken({ email });
-  res.json({ verified: true, message: "Enrollment verified successfully.", enrollment_token });
+    if (!email || !code) {
+      return res.status(400).json({
+        error: "Email and enrollment code are required.",
+      });
+    }
+
+    const result = await db.verifyEnrollmentCode(email, code);
+
+    if (!result.ok) {
+      if (result.reason === "expired") {
+        return res.status(410).json({
+          error: "This enrollment code has expired. Please request a new code.",
+        });
+      }
+
+      if (result.reason === "locked") {
+        return res.status(429).json({
+          error: "Too many incorrect attempts. Please request a new code.",
+        });
+      }
+
+      return res.status(400).json({
+        error: "Invalid enrollment code. Please check the code sent to your email.",
+      });
+    }
+
+    const enrollment_token = issueEnrollmentToken({
+      email: String(email).trim(),
+    });
+
+    res.json({
+      verified: true,
+      message: "Enrollment verified successfully.",
+      enrollment_token,
+    });
+  } catch (err) {
+    console.error("[eduvault] Enrollment verification failed:", err);
+    res.status(400).json({
+      error: err.message || "Could not verify enrollment code.",
+    });
+  }
 });
 
 // Register a new teacher. Requires a valid enrollment_token proving the
