@@ -144,9 +144,9 @@ router.get("/students", async (req, res) => {
   }
 });
 
-router.patch("/students/:roll_no/active", adminActionLimiter, (req, res) => {
+router.patch("/students/:roll_no/active", adminActionLimiter, async (req, res) => {
   try {
-    const student = db.setStudentActive(req.params.roll_no, req.body.active);
+    const student = await db.setStudentActive(req.params.roll_no, req.body.active);
     res.json({ student });
   } catch (err) {
     res.status(400).json({ error: err.message });
