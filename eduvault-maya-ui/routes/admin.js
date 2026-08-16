@@ -11,8 +11,14 @@ const adminActionLimiter = rateLimit({ windowMs: 60 * 1000, max: 60 });
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // ---- Invitations (no code yet) -----------------------------------------
-router.get("/invitations", (req, res) => {
-  res.json({ invitations: db.listInvitations() });
+router.get("/invitations", async (req, res) => {
+  try {
+    const invitations = await db.listInvitations();
+    res.json({ invitations });
+  } catch (err) {
+    console.error("[eduvault] Failed to list invitations:", err);
+    res.status(500).json({ error: "Could not load invitations." });
+  }
 });
 
 // Admin enters one email → send invitation only (code is sent later by employee)
