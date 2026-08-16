@@ -77,8 +77,13 @@ router.post("/invitations/:id/revoke", adminActionLimiter, async (req, res) => {
 });
 
 // Keep enrollment-codes list for issued codes
-router.get("/enrollment-codes", (req, res) => {
-  res.json({ codes: db.listEnrollmentCodes() });
+router.get("/enrollment-codes", async (req, res) => {
+  try {
+    const codes = await db.listEnrollmentCodes();
+    res.json({ codes });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.post("/enrollment-codes/:id/revoke", adminActionLimiter, (req, res) => {
