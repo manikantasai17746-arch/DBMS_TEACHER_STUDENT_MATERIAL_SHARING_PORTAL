@@ -2,16 +2,5 @@
   "buildCommand": "npm install",
   "devCommand": "npm run dev",
   "outputDirectory": "public",
-  "framework": "nodejs",
-  "env": [
-    "DATABASE_URL",
-    "SESSION_SECRET",
-    "ADMIN_EMP_ID",
-    "ADMIN_PASSWORD",
-    "ADMIN_EMAIL",
-    "MAIL_USER",
-    "MAIL_APP_PASSWORD",
-    "MAIL_FROM_NAME",
-    "NODE_ENV"
-  ]
+  "framework": "nodejs"
 }
