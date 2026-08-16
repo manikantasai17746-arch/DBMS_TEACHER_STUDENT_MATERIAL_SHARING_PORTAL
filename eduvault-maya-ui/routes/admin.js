@@ -86,9 +86,9 @@ router.get("/enrollment-codes", async (req, res) => {
   }
 });
 
-router.post("/enrollment-codes/:id/revoke", adminActionLimiter, (req, res) => {
+router.post("/enrollment-codes/:id/revoke", adminActionLimiter, async (req, res) => {
   try {
-    const code = db.revokeEnrollmentCode(req.params.id);
+    const code = await db.revokeEnrollmentCode(req.params.id);
     res.json({ code });
   } catch (err) {
     res.status(400).json({ error: err.message });
