@@ -205,7 +205,7 @@ const teacher = await db.authenticateTeacher(emp_id, password);
 // the scanned Employee ID pre-filled. If it IS registered but this device
 // isn't trusted yet, the frontend falls back to the password form with the
 // Employee ID pre-filled.
-router.post("/card-login", cardLoginLimiter, (req, res) => {
+router.post("/card-login", cardLoginLimiter, async (req, res) => {
   const { emp_id, device_token } = req.body;
   if (!emp_id) return res.status(400).json({ error: "No Employee ID was scanned." });
   try {
