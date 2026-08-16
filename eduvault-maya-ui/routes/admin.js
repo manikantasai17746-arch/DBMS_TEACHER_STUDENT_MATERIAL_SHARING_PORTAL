@@ -34,7 +34,8 @@ router.post("/invitations", adminActionLimiter, async (req, res) => {
       });
     }
 
-const invitation = await db.createInvitation({      email,
+    const invitation = await db.createInvitation({
+      email,
       department,
       employee_id: emp_id,
       name,
@@ -137,10 +138,13 @@ router.delete("/teachers/:emp_id", adminActionLimiter, async (req, res) => {
 router.get("/students", async (req, res) => {
   try {
     const students = await db.listAllStudents();
-    res.json({ students });
+    res.json({ students: Array.isArray(students) ? students : [] });
   } catch (err) {
     console.error("[eduvault] Failed to list students:", err);
-    res.status(500).json({ error: "Could not load students." });
+    res.status(500).json({
+      error: "Could not load students.",
+      detail: process.env.NODE_ENV === "production" ? undefined : String(err.message || err),
+    });
   }
 });
 
