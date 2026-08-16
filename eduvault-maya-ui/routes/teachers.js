@@ -41,7 +41,7 @@ router.post("/enrollment/request", enrollmentRequestLimiter, async (req, res) =>
       });
     }
 
-    const gate = db.canRequestEnrollmentCode(email);
+const gate = await db.canRequestEnrollmentCode(email);
     if (!gate.allowed) {
       res.set("Retry-After", String(gate.retryAfterSec));
       const msg =
