@@ -130,8 +130,14 @@ router.delete("/teachers/:emp_id", adminActionLimiter, (req, res) => {
 });
 
 // ---- Students ---------------------------------------------------------
-router.get("/students", (req, res) => {
-  res.json({ students: db.listAllStudents() });
+router.get("/students", async (req, res) => {
+  try {
+    const students = await db.listAllStudents();
+    res.json({ students });
+  } catch (err) {
+    console.error("[eduvault] Failed to list students:", err);
+    res.status(500).json({ error: "Could not load students." });
+  }
 });
 
 router.patch("/students/:roll_no/active", adminActionLimiter, (req, res) => {
