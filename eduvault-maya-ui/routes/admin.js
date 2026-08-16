@@ -124,9 +124,9 @@ router.patch("/teachers/:emp_id/role", adminActionLimiter, async (req, res) => {
   }
 });
 
-router.delete("/teachers/:emp_id", adminActionLimiter, (req, res) => {
+router.delete("/teachers/:emp_id", adminActionLimiter, async (req, res) => {
   try {
-    const teacher = db.deleteTeacher(req.params.emp_id);
+    const teacher = await db.deleteTeacher(req.params.emp_id);
     res.json({ teacher });
   } catch (err) {
     res.status(400).json({ error: err.message });
