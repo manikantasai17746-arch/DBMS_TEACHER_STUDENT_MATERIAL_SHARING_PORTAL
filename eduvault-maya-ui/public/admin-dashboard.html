@@ -140,10 +140,16 @@ function statusPillHtml(status, activeLabel, inactiveLabel) {
 
 // ---- Overview stats ---------------------------------------------------
 function renderStats(codes, teachers, students) {
-  const activeCodes = codes.filter((c) => c.status === "pending" || c.status === "active").length;
+  const c = Array.isArray(codes) ? codes : [];
+  const t = Array.isArray(teachers) ? teachers : [];
+  const s = Array.isArray(students) ? students : [];
+  const activeCodes = c.filter((x) => {
+    const st = x && (x.status || (x.revoked_at ? "revoked" : x.used_at ? "used" : "pending"));
+    return st === "pending" || st === "active";
+  }).length;
   document.getElementById("statRow").innerHTML = `
-    <div class="stat-box"><div class="num">${teachers.length}</div><div class="lbl">Employees</div></div>
-    <div class="stat-box"><div class="num">${students.length}</div><div class="lbl">Students</div></div>
+    <div class="stat-box"><div class="num">${t.length}</div><div class="lbl">Employees</div></div>
+    <div class="stat-box"><div class="num">${s.length}</div><div class="lbl">Students</div></div>
     <div class="stat-box"><div class="num">${activeCodes}</div><div class="lbl">Pending invitations</div></div>
   `;
 }
@@ -282,24 +288,28 @@ async function removeTeacher(emp_id) {
 
 // ---- Students ------------------------------------------------------------
 async function loadStudents() {
-  const { students } = await api("/admin/students");
-  document.getElementById("studentsCountPill").textContent = students.length;
+  const data = await api("/admin/students");
+  const students = Array.isArray(data.students) ? data.students : [];
+  document.getElementById("studentsCountPill").textContent = String(students.length);
   document.getElementById("studentsEmpty").style.display = students.length ? "none" : "block";
-  document.getElementById("studentsTbody").innerHTML = students.map((s) => `
+  document.getElementById("studentsTbody").innerHTML = students.map((s) => {
+    const roll = String(s.roll_no || "");
+    const active = s.active !== false && s.active !== 0 && s.active !== "false";
+    return `
     <tr>
-      <td>${escapeHtml(s.roll_no)}</td>
-      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(roll)}</td>
+      <td>${escapeHtml(s.name || "—")}</td>
       <td>${escapeHtml(s.department || "—")}</td>
       <td>${escapeHtml(s.semester || "—")}</td>
-      <td>${statusPillHtml(s.active ? "active" : "inactive")}</td>
+      <td>${statusPillHtml(active ? "active" : "inactive")}</td>
       <td class="table-actions">
-        <button class="btn btn-sm ${s.active ? "btn-danger" : "btn-outline"}" onclick="toggleStudentActive('${s.roll_no}', ${!s.active})">
-          ${s.active ? "Deactivate" : "Activate"}
+        <button class="btn btn-sm ${active ? "btn-danger" : "btn-outline"}" onclick="toggleStudentActive('${escapeHtml(roll)}', ${!active})">
+          ${active ? "Deactivate" : "Activate"}
         </button>
-        <button class="btn btn-danger btn-sm" onclick="removeStudent('${s.roll_no}')">Delete</button>
+        <button class="btn btn-danger btn-sm" onclick="removeStudent('${escapeHtml(roll)}')">Delete</button>
       </td>
-    </tr>
-  `).join("");
+    </tr>`;
+  }).join("");
   return students;
 }
 
@@ -326,11 +336,31 @@ async function removeStudent(roll_no) {
 
 // ---- Load everything -----------------------------------------------------
 async function refreshAll() {
+  // Load each section independently so one failure (e.g. codes) does not
+  // hide teachers/students counts.
+  const codes = await loadCodes().catch((err) => {
+    console.error(err);
+    toast(err.message || "Could not load invitations.", true);
+    return [];
+  });
+  const teachers = await loadTeachers().catch((err) => {
+    console.error(err);
+    toast(err.message || "Could not load teachers.", true);
+    return [];
+  });
+  const students = await loadStudents().catch((err) => {
+    console.error(err);
+    toast(err.message || "Could not load students.", true);
+    return [];
+  });
   try {
-    const [codes, teachers, students] = await Promise.all([loadCodes(), loadTeachers(), loadStudents()]);
-    renderStats(codes, teachers, students);
+    renderStats(
+      Array.isArray(codes) ? codes : [],
+      Array.isArray(teachers) ? teachers : [],
+      Array.isArray(students) ? students : []
+    );
   } catch (err) {
-    toast(err.message, true);
+    console.error(err);
   }
 }
 
