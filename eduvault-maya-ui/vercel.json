@@ -2,5 +2,5 @@
   "buildCommand": "npm install",
   "devCommand": "npm run dev",
   "outputDirectory": "public",
-  "framework": "express""framework": "nodejs"
+  "framework": "express"
 }
