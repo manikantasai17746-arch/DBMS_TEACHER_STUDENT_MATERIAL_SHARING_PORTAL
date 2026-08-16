@@ -57,8 +57,8 @@ const gate = await db.canRequestEnrollmentCode(email);
       });
     }
 
-    const { code, record } = db.createEnrollmentCode({
-      email,
+const { code, record } = await db.createEnrollmentCode({
+  email,
       department: department || invitation.department,
       employee_id: emp_id || invitation.employee_id,
     });
