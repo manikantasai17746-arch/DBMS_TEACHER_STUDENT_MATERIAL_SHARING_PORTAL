@@ -40,8 +40,13 @@ router.post("/register", registerLimiter, async (req, res) => {
 
     // Registering proves ownership of the password just as much as logging
     // in does, so this device can be trusted for card-login right away.
+    // Device trust is best-effort — never fail registration if it errors.
     if (req.body.device_token) {
-      await db.trustDevice("student", student.roll_no, req.body.device_token);
+      try {
+        await db.trustDevice("student", student.roll_no, req.body.device_token);
+      } catch (trustErr) {
+        console.warn("[eduvault] trustDevice after student register:", trustErr.message);
+      }
     }
 
     const token = issueToken({ sub: student.roll_no, role: "student" });
