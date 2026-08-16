@@ -209,7 +209,10 @@ router.post("/card-login", cardLoginLimiter, async (req, res) => {
   const { emp_id, device_token } = req.body;
   if (!emp_id) return res.status(400).json({ error: "No Employee ID was scanned." });
   try {
-    const teacher = db.authenticateTeacherByCard(String(emp_id).trim(), device_token);
+const teacher = await db.authenticateTeacherByCard(
+  String(emp_id).trim(),
+  device_token
+);
     const token = issueToken({ sub: teacher.emp_id, role: teacher.role });
     res.json({ teacher, token });
   } catch (err) {
