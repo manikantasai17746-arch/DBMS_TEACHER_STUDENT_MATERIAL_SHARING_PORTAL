@@ -83,29 +83,23 @@ const INLINE_SAFE_EXT = new Set([
   ".mp3", ".wav", ".mp4", ".webm", ".txt",
 ]);
 
-const { toSafeFilename, contentDisposition } = require("./lib/filename");
+const { contentDisposition: cd } = require("./lib/filename");
 
 if (storage.driver === "local") {
+  // Note: setHeaders is synchronous, so we cannot await a DB lookup here.
+  // View/download API routes already set a proper Content-Disposition with
+  // the human-readable title. The static path uses the stored filename.
   app.use(
     "/uploads",
     express.static(storage.localUploadDir, {
       setHeaders: (res, filePath) => {
         res.set("X-Content-Type-Options", "nosniff");
         const ext = path.extname(filePath).toLowerCase();
-
-        // Look up the material this stored (UUID-named) file belongs to, so
-        // we can show its real title instead of the random filename on disk
-        // -- this covers direct/"View" links, in addition to the dedicated
-        // download route in routes/materials.js which already does this.
-        const material = db.findMaterialByStoredFilename(path.basename(filePath));
-        const niceName = material ? toSafeFilename(material.title, ext) : path.basename(filePath);
-
+        const niceName = path.basename(filePath);
         if (!INLINE_SAFE_EXT.has(ext)) {
-          res.set("Content-Disposition", contentDisposition("attachment", niceName));
+          res.set("Content-Disposition", cd("attachment", niceName));
         } else {
-          // Previewable inline, but if the browser/user does save it anyway,
-          // it should still save under the real title, not the UUID.
-          res.set("Content-Disposition", contentDisposition("inline", niceName));
+          res.set("Content-Disposition", cd("inline", niceName));
         }
       },
     })
@@ -131,8 +125,21 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: "Something went wrong on our end. Please try again." });
 });
 
-app.listen(PORT, () => {
-  console.log(`EduVault server running on port ${PORT}`);
-  console.log(`Storage driver: ${storage.driver}`);
-  console.log(`Email sending: ${require("./lib/mailer").isConfigured() ? "configured" : "NOT configured (set MAIL_USER / MAIL_APP_PASSWORD)"}`);
-});
+// Vercel (and similar serverless hosts) import this file and handle the
+// request lifecycle themselves. Only bind a port when running as a
+// traditional long-lived Node process (local / Render / Railway / etc.).
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`EduVault server running on port ${PORT}`);
+    console.log(`Storage driver: ${storage.driver}`);
+    console.log(
+      `Email sending: ${
+        require("./lib/mailer").isConfigured()
+          ? "configured"
+          : "NOT configured (set MAIL_USER / MAIL_APP_PASSWORD)"
+      }`
+    );
+  });
+}
+
+module.exports = app;
