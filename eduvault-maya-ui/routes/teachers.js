@@ -176,7 +176,7 @@ router.post("/register", registerLimiter, (req, res) => {
 });
 
 // Login
-router.post("/login", loginLimiter, (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   try {
     const { emp_id, password } = req.body;
     if (!emp_id || !password) {
