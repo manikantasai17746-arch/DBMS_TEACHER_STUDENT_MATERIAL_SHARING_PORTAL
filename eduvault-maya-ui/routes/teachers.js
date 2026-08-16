@@ -143,7 +143,7 @@ router.post("/enrollment/verify", enrollmentVerifyLimiter, async (req, res) => {
 // Register a new teacher. Requires a valid enrollment_token proving the
 // submitted email just passed Enrollment Code verification -- Employee ID +
 // registration details alone are NOT sufficient (see security notes below).
-router.post("/register", registerLimiter, (req, res) => {
+router.post("/register", registerLimiter, async (req, res) => {
   try {
     const { emp_id, name, department, subjects_handled, email, password, enrollment_token } = req.body;
 
@@ -169,14 +169,14 @@ router.post("/register", registerLimiter, (req, res) => {
 
     // Check whether this ID card is already registered as either a student
     // or a teacher.
-    const existing = db.isIdCardAlreadyRegistered(emp_id);
+    const existing = await db.isIdCardAlreadyRegistered(emp_id);
     if (existing.exists) {
       return res.status(409).json({
         error: `This ID card is already registered as a ${existing.role}.`,
       });
     }
 
-    const teacher = db.createTeacher({
+    const teacher = await db.createTeacher({
       emp_id: String(emp_id).trim(),
       name,
       department,
@@ -187,17 +187,18 @@ router.post("/register", registerLimiter, (req, res) => {
     });
 
     // Mark the admin invitation as used for this email
-    db.markInvitationUsed(email);
+    await db.markInvitationUsed(email);
 
     // Registering proves ownership of the password just as much as logging
     // in does, so this device can be trusted for card-login right away.
     if (req.body.device_token) {
-      db.trustDevice("teacher", teacher.emp_id, req.body.device_token);
+      await db.trustDevice("teacher", teacher.emp_id, req.body.device_token);
     }
 
     const token = issueToken({ sub: teacher.emp_id, role: teacher.role });
     res.status(201).json({ teacher, token });
   } catch (err) {
+    console.error("[eduvault] teacher register failed:", err);
     res.status(400).json({ error: err.message });
   }
 });
@@ -260,38 +261,58 @@ const teacher = await db.authenticateTeacherByCard(
 // Public: list/search teachers (needed for the student search typeahead).
 // This intentionally requires no login -- looking a teacher up by Employee
 // ID or name is the core feature -- but it is rate-limited to slow scraping.
-router.get("/", searchLimiter, (req, res) => {
-  const q = (req.query.q || "").toLowerCase().trim();
-  let teachers = db.listTeachers();
-  if (q) {
-    teachers = teachers.filter(
-      (t) => t.emp_id.toLowerCase().includes(q) || t.name.toLowerCase().includes(q)
-    );
+router.get("/", searchLimiter, async (req, res) => {
+  try {
+    const q = (req.query.q || "").toLowerCase().trim();
+    let teachers = await db.listTeachers();
+    if (q) {
+      teachers = teachers.filter(
+        (t) =>
+          t.emp_id.toLowerCase().includes(q) ||
+          (t.name || "").toLowerCase().includes(q)
+      );
+    }
+    res.json({ teachers });
+  } catch (err) {
+    console.error("[eduvault] list teachers failed:", err);
+    res.status(500).json({ error: "Something went wrong on our end. Please try again." });
   }
-  res.json({ teachers });
 });
 
 // Public: single teacher lookup (used for the bookmark chips / result header)
-router.get("/:emp_id", searchLimiter, (req, res) => {
-  const teacher = db.sanitizeTeacher(db.findTeacher(req.params.emp_id));
-  if (!teacher) return res.status(404).json({ error: "Teacher not found." });
-  res.json({ teacher });
+router.get("/:emp_id", searchLimiter, async (req, res) => {
+  try {
+    const teacher = db.sanitizeTeacher(await db.findTeacher(req.params.emp_id));
+    if (!teacher) return res.status(404).json({ error: "Teacher not found." });
+    res.json({ teacher });
+  } catch (err) {
+    console.error("[eduvault] get teacher failed:", err);
+    res.status(500).json({ error: "Something went wrong on our end. Please try again." });
+  }
 });
 
 // Analytics: access counts per material.
 // SECURITY FIX: previously unauthenticated -- anyone could read any
 // teacher's view counts. Now requires a valid teacher token whose subject
 // matches the emp_id being queried.
-router.get("/:emp_id/analytics", requireAuth("teacher"), (req, res) => {
-  if (req.auth.sub !== req.params.emp_id) {
-    return res.status(403).json({ error: "You can only view your own analytics." });
+router.get("/:emp_id/analytics", requireAuth("teacher"), async (req, res) => {
+  try {
+    if (req.auth.sub !== req.params.emp_id) {
+      return res.status(403).json({ error: "You can only view your own analytics." });
+    }
+    const teacher = await db.findTeacher(req.params.emp_id);
+    if (!teacher) return res.status(404).json({ error: "Teacher not found." });
+    const materials = await db.materialsByTeacher(req.params.emp_id);
+    const counts = await db.accessCountsForTeacher(req.params.emp_id);
+    const data = materials.map((m) => ({
+      ...m,
+      access_count: counts[m.material_id] || 0,
+    }));
+    res.json({ materials: data });
+  } catch (err) {
+    console.error("[eduvault] teacher analytics failed:", err);
+    res.status(500).json({ error: "Something went wrong on our end. Please try again." });
   }
-  const teacher = db.findTeacher(req.params.emp_id);
-  if (!teacher) return res.status(404).json({ error: "Teacher not found." });
-  const materials = db.materialsByTeacher(req.params.emp_id);
-  const counts = db.accessCountsForTeacher(req.params.emp_id);
-  const data = materials.map((m) => ({ ...m, access_count: counts[m.material_id] || 0 }));
-  res.json({ materials: data });
 });
 
 module.exports = router;
