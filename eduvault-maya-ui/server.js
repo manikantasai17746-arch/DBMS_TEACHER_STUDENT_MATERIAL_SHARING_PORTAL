@@ -43,8 +43,9 @@ const storage = require("./lib/storage");
 // default, overridable with ADMIN_EMP_ID / ADMIN_PASSWORD env vars -- see
 // .env.example). Created once, idempotently, on every boot -- it never goes
 // through the public Enrollment Code registration flow.
-db.ensureSeedAdmin();
-
+db.ensureSeedAdmin().catch((err) => {
+  console.error("[eduvault] Failed to ensure seed admin:", err);
+});
 const app = express();
 const PORT = process.env.PORT || 3000; // Render sets $PORT -- always read it, never hard-code a port
 
